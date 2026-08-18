@@ -122,24 +122,48 @@ alter table public.collection enable row level security;
 alter table public.territory enable row level security;
 alter table public.receipts enable row level security;
 
--- 用户表：统一策略（仅本人）
-do $$
-declare
-  t text;
-begin
-  foreach t in array array[
-    'profiles','world','companion','tasks','actions','chronicle','collection','territory','receipts'
-  ]
-  loop
-    execute format('create policy "own_select" on public.%I for select using (auth.uid() = user_id or auth.uid() = id);', t);
-    execute format('create policy "own_insert" on public.%I for insert with check (auth.uid() = user_id or auth.uid() = id);', t);
-    execute format('create policy "own_update" on public.%I for update using (auth.uid() = user_id or auth.uid() = id);', t);
-    execute format('create policy "own_delete" on public.%I for delete using (auth.uid() = user_id or auth.uid() = id);', t);
-  end loop;
-end $$;
+-- 用户表：仅本人可读写。注意各表用户标识列不同：
+--   profiles 用 id 列（= auth.users.id）
+--   其余表用 user_id 列
+
+-- profiles（用户列 = id）
+drop policy if exists "profiles_own" on public.profiles;
+create policy "profiles_own" on public.profiles
+  for all using (auth.uid() = id) with check (auth.uid() = id);
+
+-- world / companion / territory（用户列 = user_id，主键）
+drop policy if exists "world_own" on public.world;
+create policy "world_own" on public.world
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+drop policy if exists "companion_own" on public.companion;
+create policy "companion_own" on public.companion
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+drop policy if exists "territory_own" on public.territory;
+create policy "territory_own" on public.territory
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- tasks / actions / chronicle / receipts（用户列 = user_id，带自增 id）
+drop policy if exists "tasks_own" on public.tasks;
+create policy "tasks_own" on public.tasks
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+drop policy if exists "actions_own" on public.actions;
+create policy "actions_own" on public.actions
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+drop policy if exists "chronicle_own" on public.chronicle;
+create policy "chronicle_own" on public.chronicle
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+drop policy if exists "receipts_own" on public.receipts;
+create policy "receipts_own" on public.receipts
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- collection（复合主键，无独立 id，用户列 = user_id）
+drop policy if exists "collection_own" on public.collection;
+create policy "collection_own" on public.collection
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 -- items 目录：所有登录用户可读
 alter table public.items enable row level security;
+drop policy if exists "items_read" on public.items;
 create policy "items_read" on public.items for select using (true);
 
 -- =====================================================

@@ -15,9 +15,19 @@ export async function getCurrentUser() {
   return data.user;
 }
 
+function withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`${label}请求超时（${ms / 1000} 秒）`)), ms)
+    ),
+  ]);
+}
+
 export function initAuth() {
   const sb = getClient();
   if (!sb) return;
+  console.log('[auth] Supabase 客户端已就绪，URL =', sb.auth ? 'ok' : 'missing');
 
   const form = document.getElementById('authForm');
   const submitBtn = document.getElementById('authSubmit');
@@ -48,21 +58,28 @@ export function initAuth() {
     msgEl.className = 'log';
 
     try {
+      const result = mode === 'login'
+        ? await withTimeout(sb.auth.signInWithPassword({ email, password }), 20000, '登录')
+        : await withTimeout(sb.auth.signUp({ email, password }), 20000, '注册');
+      const { data, error } = result;
+
+      if (error) {
+        msgEl.textContent = '出错：' + (error.message || error);
+        msgEl.className = 'log error';
+        return;
+      }
+
       if (mode === 'login') {
-        const { data, error } = await sb.auth.signInWithPassword({ email, password });
-        if (error) throw error;
         emit(data.user);
       } else {
-        const { data, error } = await sb.auth.signUp({ email, password });
-        if (error) throw error;
-        // 部分 Supabase 项目开了邮箱确认，需提示
         msgEl.textContent = data.session
           ? '注册成功'
           : '注册成功！请查收邮箱确认邮件后登录。';
         msgEl.className = 'log success';
       }
     } catch (err) {
-      msgEl.textContent = '出错：' + err.message;
+      console.error('[auth] 请求异常：', err);
+      msgEl.textContent = '出错：' + (err && err.message ? err.message : err);
       msgEl.className = 'log error';
     }
   });
