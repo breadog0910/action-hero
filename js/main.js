@@ -2,7 +2,10 @@ import { initSupabase, isConfigured } from './supabase.js';
 import { initAuth, onAuthChange, signOut } from './auth.js';
 import * as printer from './printer.js';
 import * as game from './game.js';
-import { celebrateReceipt } from './receipt.js';
+import * as world from './world.js';
+import * as chronicle from './chronicle.js';
+import { askOracle } from './oracle.js';
+import { celebrateReceipt, reviewReceipt, oracleReceipt } from './receipt.js';
 
 // 自动打印开关（存 localStorage，默认开）
 function autoPrintOn() {
@@ -20,6 +23,11 @@ function showView(name) {
   document.querySelectorAll('.tab').forEach((t) => {
     t.classList.toggle('active', t.dataset.view === name);
   });
+  // 切到对应视图时触发渲染
+  if (name === 'tasks') renderTasksView();
+  if (name === 'chronicle') renderChronicleView();
+  if (name === 'oracle') renderOracleView();
+  if (name === 'world') renderWorldView();
 }
 
 function initRouter() {
@@ -102,18 +110,160 @@ function initAuthUI() {
   settingsView.querySelector('#signOutBtn').addEventListener('click', signOut);
 }
 
-// ===== 视图占位（Phase 2 起逐步替换为真实视图）=====
+// ===== 视图占位（Phase 3 起逐步替换为真实视图）=====
 function renderPlaceholders() {
   const placeholders = {
     companion: '🐣 伙伴：一个陪你成长的生命（下一步实现）',
-    world: '🏰 王国：你的领地与世界图鉴（下一步实现）',
-    chronicle: '📜 编年史：日记、复盘、世界史（下一步实现）',
-    oracle: '🔮 贤者之书：心里想问，翻一页得答案（下一步实现）',
   };
   for (const [id, text] of Object.entries(placeholders)) {
     const sec = document.getElementById(`view-${id}`);
     sec.innerHTML = `<div class="card"><h2>${text.split('：')[0]}</h2><p class="log">${text.split('：')[1] || text}</p></div>`;
   }
+}
+
+// ===== 王国视图：世界状态 + 领地/图鉴占位 =====
+async function renderWorldView() {
+  const sec = document.getElementById('view-world');
+  let w = null;
+  try {
+    w = await world.getWorld();
+  } catch (e) {
+    sec.innerHTML = '<div class="card"><h2>🏰 王国</h2><p class="log">加载世界状态失败</p></div>';
+    return;
+  }
+
+  const seasonEmoji = world.SEASON_EMOJI[w.season] || '🌸';
+  const seasonName = world.SEASON_NAMES[w.season] || '春';
+  const phase = world.daytimePhase();
+
+  sec.innerHTML = `
+    <div class="card">
+      <h2>🏰 王国</h2>
+      <p class="log">第 ${w.day_count} 天 · ${seasonEmoji} ${seasonName}季 · ${phase}</p>
+      <p class="log">世界之光：${'✨'.repeat(Math.min(10, Math.floor(w.light / 10) + 1))} (${w.light})</p>
+    </div>
+    <div class="card">
+      <h2>🗺️ 领地与图鉴</h2>
+      <p class="log">下一步实现</p>
+    </div>
+  `;
+}
+
+// ===== 编年史视图：日记 + 复盘 =====
+async function renderChronicleView() {
+  const sec = document.getElementById('view-chronicle');
+  const today = chronicle.todayStr();
+
+  sec.innerHTML = `
+    <div class="card">
+      <h2>📜 编年史</h2>
+      <p class="log">${today} · 世界的历史书</p>
+    </div>
+
+    <div class="card">
+      <label for="journalInput">✍️ 写下今天的日记</label>
+      <textarea id="journalInput" rows="3" placeholder="今天发生了什么？感觉如何？"></textarea>
+      <button id="saveJournalBtn" class="btn btn-primary btn-block">写入编年史</button>
+    </div>
+
+    <div class="card">
+      <h2>🌙 今日复盘</h2>
+      <p class="log">把今天的世界轨迹，印成一张小票</p>
+      <button id="reviewBtn" class="btn btn-block">打印今日复盘</button>
+    </div>
+
+    <div class="card">
+      <h2>📖 今日记录</h2>
+      <ul id="chronicleList" class="task-list"></ul>
+    </div>
+  `;
+
+  // 写日记
+  sec.querySelector('#saveJournalBtn').addEventListener('click', async () => {
+    const content = sec.querySelector('#journalInput').value.trim();
+    if (!content) return;
+    try {
+      await chronicle.addEntry('journal', content);
+      sec.querySelector('#journalInput').value = '';
+      await renderChronicleView();
+    } catch (err) {
+      alert('保存失败：' + err.message);
+    }
+  });
+
+  // 打印复盘
+  sec.querySelector('#reviewBtn').addEventListener('click', async () => {
+    try {
+      const actions = await chronicle.getTodayActions();
+      const entries = await chronicle.getTodayEntries();
+      if (autoPrintOn() && printer.isConnected()) {
+        await printer.printRaster(reviewReceipt({ date: today, actions, entries }));
+      } else {
+        alert('请先连接打印机');
+      }
+    } catch (err) {
+      alert('复盘失败：' + err.message);
+    }
+  });
+
+  // 今日记录列表
+  const listEl = sec.querySelector('#chronicleList');
+  try {
+    const entries = await chronicle.getTodayEntries();
+    if (entries.length === 0) {
+      listEl.innerHTML = '<li class="task-empty">今天还没有记录</li>';
+    } else {
+      const emoji = { journal: '✍️', review: '🌙', conversation: '💬', action: '⚔️', oracle: '🔮' };
+      listEl.innerHTML = entries.map((e) => `
+        <li class="task-item">
+          <div class="task-info">
+            <span class="task-title">${emoji[e.type] || '·'} ${escapeHtml(e.content || '')}</span>
+          </div>
+        </li>
+      `).join('');
+    }
+  } catch (err) {
+    listEl.innerHTML = `<li class="task-empty">加载失败：${err.message}</li>`;
+  }
+}
+
+// ===== 贤者之书视图：答案之书 =====
+async function renderOracleView() {
+  const sec = document.getElementById('view-oracle');
+  sec.innerHTML = `
+    <div class="card">
+      <h2>🔮 贤者之书</h2>
+      <p class="log">心里想问一件事，翻一页，得到答案</p>
+    </div>
+
+    <div class="card">
+      <label for="oracleQuestion">你的问题（可留空）</label>
+      <input id="oracleQuestion" type="text" placeholder="例如：我今天该先做哪件事？">
+      <button id="oracleBtn" class="btn btn-primary btn-block">翻一页</button>
+    </div>
+
+    <div class="card oracle-result" hidden>
+      <h2>📜 答案</h2>
+      <p id="oracleAnswer" class="oracle-answer"></p>
+    </div>
+  `;
+
+  sec.querySelector('#oracleBtn').addEventListener('click', async () => {
+    const question = sec.querySelector('#oracleQuestion').value.trim();
+    const resultEl = sec.querySelector('.oracle-result');
+    const answerEl = sec.querySelector('#oracleAnswer');
+    try {
+      const { answer } = await askOracle(question);
+      answerEl.textContent = answer;
+      resultEl.hidden = false;
+
+      if (autoPrintOn() && printer.isConnected()) {
+        await printer.printRaster(oracleReceipt({ question, answer }));
+      }
+    } catch (err) {
+      alert('求签失败：' + err.message);
+    }
+  });
 }
 
 // ===== 勇者视图：任务列表 + 新建 + 完成 =====

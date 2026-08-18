@@ -98,3 +98,58 @@ export function celebrateReceipt(taskTitle, rewards) {
     { text: `行动勇者 · ${todayStr()}`, size: 16, align: 'center' },
   ]);
 }
+
+// ===== 复盘小票：今日总结 =====
+export function reviewReceipt({ date, actions, entries }) {
+  const lines = [
+    { text: '🌙 今日复盘', size: 26, align: 'center', bold: true, space: 6 },
+    { divider: true },
+    { text: date, size: 18, align: 'center', space: 6 },
+    { divider: true },
+  ];
+
+  const totalXp = actions.reduce((s, a) => s + (a.xp || 0), 0);
+  const totalLight = actions.reduce((s, a) => s + (a.light || 0), 0);
+
+  if (actions.length === 0) {
+    lines.push({ text: '今天还没有行动记录', size: 18, align: 'center', space: 4 });
+    lines.push({ text: '世界在安静地等你', size: 16, align: 'center', space: 6 });
+  } else {
+    lines.push({ text: `完成了 ${actions.length} 件事`, size: 20, align: 'center', space: 4 });
+    lines.push({ text: `共获得 +${totalXp} XP`, size: 18, space: 2 });
+    lines.push({ text: `世界之光 +${totalLight}`, size: 18, space: 6 });
+
+    lines.push({ divider: true });
+    lines.push({ text: '今日轨迹', size: 18, bold: true, space: 4 });
+    const journalLines = entries
+      .filter((e) => e.type === 'journal')
+      .map((e) => e.content);
+    if (journalLines.length) {
+      journalLines.forEach((j) => lines.push({ text: `· ${j}`, size: 16, space: 2 }));
+    } else {
+      lines.push({ text: '（还没写日记）', size: 16, space: 2 });
+    }
+  }
+
+  lines.push({ divider: true });
+  lines.push({ text: '明天，世界继续生长', size: 18, align: 'center', space: 6 });
+  lines.push({ text: `行动勇者 · ${todayStr()}`, size: 16, align: 'center' });
+  return renderReceipt(lines);
+}
+
+// ===== 答案小票：贤者之书 =====
+export function oracleReceipt({ question, answer }) {
+  const lines = [
+    { text: '🔮 贤者之书', size: 26, align: 'center', bold: true, space: 6 },
+    { divider: true },
+  ];
+  if (question) {
+    lines.push({ text: '你问', size: 16, align: 'center', space: 2 });
+    lines.push({ text: `「${question}」`, size: 18, align: 'center', space: 6 });
+    lines.push({ divider: true });
+  }
+  lines.push({ text: answer, size: 22, align: 'center', space: 8 });
+  lines.push({ divider: true });
+  lines.push({ text: `行动勇者 · ${todayStr()}`, size: 16, align: 'center' });
+  return renderReceipt(lines);
+}
