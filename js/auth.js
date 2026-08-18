@@ -1,4 +1,5 @@
 import { getClient } from './supabase.js';
+import { SUPABASE_URL } from './config.js';
 
 // 登录态变化回调（由 main.js 注册）
 const listeners = [];
@@ -48,6 +49,24 @@ export function initAuth() {
     mode = mode === 'login' ? 'signup' : 'login';
     updateMode();
     msgEl.textContent = '';
+  });
+
+  // 网络检测按钮：结果直接显示在页面上
+  const diagBtn = document.getElementById('diagBtn');
+  diagBtn.addEventListener('click', async () => {
+    msgEl.textContent = '检测中…';
+    msgEl.className = 'log';
+    const t0 = performance.now();
+    try {
+      const r = await fetch(`${SUPABASE_URL}/auth/v1/health`, { method: 'GET' });
+      const ms = Math.round(performance.now() - t0);
+      msgEl.textContent = `✅ 网络正常！服务器响应 HTTP ${r.status}，耗时 ${ms} 毫秒。可以正常登录。`;
+      msgEl.className = 'log success';
+    } catch (err) {
+      const ms = Math.round(performance.now() - t0);
+      msgEl.textContent = `❌ 连不上服务器（${ms} 毫秒后失败）：${err.message}。\n\n这通常意味着浏览器访问 Supabase 被网络/VPN/代理挡住了。`;
+      msgEl.className = 'log error';
+    }
   });
 
   form.addEventListener('submit', async (e) => {

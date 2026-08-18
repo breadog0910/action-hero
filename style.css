@@ -28,6 +28,7 @@ body {
 }
 
 .hidden { display: none !important; }
+[hidden] { display: none !important; }
 
 /* ===== 登录视图 ===== */
 .auth-view {
