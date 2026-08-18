@@ -39,9 +39,10 @@ export async function listTasks() {
 
 export async function createTask(title, type = 'normal', difficulty = 1) {
   const sb = getClient();
+  const { data: { user } } = await sb.auth.getUser();
   const { data, error } = await sb
     .from('tasks')
-    .insert({ title, type, difficulty })
+    .insert({ title, type, difficulty, user_id: user.id })
     .select()
     .single();
   if (error) throw error;
