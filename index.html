@@ -2,32 +2,63 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>蓝牙小票打印</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>行动勇者 · 一个会生长的世界</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <main class="app">
-    <h1>蓝牙小票打印</h1>
+  <!-- ===== 登录 / 注册视图 ===== -->
+  <div id="authView" class="auth-view" hidden>
+    <main class="auth-card">
+      <h1>⚔️ 行动勇者</h1>
+      <p class="auth-sub">你的现实生活，是这个世界的养分</p>
 
-    <!-- 连接区 -->
-    <section class="card">
-      <button id="connectBtn" class="btn btn-primary">连接打印机</button>
-      <button id="disconnectBtn" class="btn" disabled>断开</button>
-      <p id="status" class="status">未连接</p>
-    </section>
+      <form id="authForm">
+        <input id="authEmail" type="email" placeholder="邮箱" required autocomplete="email">
+        <input id="authPassword" type="password" placeholder="密码（至少 6 位）" required autocomplete="current-password" minlength="6">
+        <button type="submit" class="btn btn-primary btn-block" id="authSubmit">登录</button>
+      </form>
 
-    <!-- 内容编辑区 -->
-    <section class="card">
-      <label for="text">打印文本（支持中文、换行）</label>
-      <textarea id="text" rows="8" placeholder="在这里输入要打印的内容&#10;例如：&#10;商品：奶茶 x2&#10;金额：36 元"></textarea>
+      <button id="authToggle" class="btn btn-link">还没有账号？注册</button>
+      <p id="authMsg" class="log"></p>
+    </main>
+  </div>
 
-      <button id="printBtn" class="btn btn-primary" disabled>立即打印</button>
-    </section>
+  <!-- ===== 主应用视图 ===== -->
+  <div id="appView" hidden>
+    <header class="topbar">
+      <span class="brand">⚔️ 行动勇者</span>
+      <div class="topbar-actions">
+        <button id="printerBtn" class="btn btn-small">🖨️ <span id="printerState">未连接</span></button>
+        <button id="settingsBtn" class="btn btn-small">⚙️</button>
+      </div>
+    </header>
 
-    <p id="log" class="log"></p>
-  </main>
+    <main class="content">
+      <!-- 勇者之路：任务 -->
+      <section id="view-tasks" class="view"></section>
+      <!-- 伙伴 -->
+      <section id="view-companion" class="view" hidden></section>
+      <!-- 王国：领地 + 图鉴 -->
+      <section id="view-world" class="view" hidden></section>
+      <!-- 编年史：日记 / 复盘 -->
+      <section id="view-chronicle" class="view" hidden></section>
+      <!-- 贤者之书：答案之书 -->
+      <section id="view-oracle" class="view" hidden></section>
+      <!-- 设置 -->
+      <section id="view-settings" class="view" hidden></section>
+    </main>
 
-  <script src="app.js"></script>
+    <nav class="tabbar">
+      <button class="tab" data-view="tasks">🧭<span>勇者</span></button>
+      <button class="tab" data-view="companion">🐣<span>伙伴</span></button>
+      <button class="tab" data-view="world">🏰<span>王国</span></button>
+      <button class="tab" data-view="chronicle">📜<span>编年史</span></button>
+      <button class="tab" data-view="oracle">🔮<span>贤者书</span></button>
+    </nav>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script type="module" src="js/main.js"></script>
 </body>
 </html>

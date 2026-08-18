@@ -4,32 +4,125 @@
   padding: 0;
 }
 
+:root {
+  --bg: #f5f6f8;
+  --card: #fff;
+  --text: #222;
+  --muted: #888;
+  --primary: #2563eb;
+  --primary-dark: #1d4ed8;
+  --border: #e2e2e2;
+  --gold: #f59e0b;
+  --green: #16a34a;
+}
+
+html, body {
+  height: 100%;
+}
+
 body {
   font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
-  background: #f5f6f8;
-  color: #222;
-  padding: 16px;
+  background: var(--bg);
+  color: var(--text);
   -webkit-text-size-adjust: 100%;
 }
 
-.app {
-  max-width: 480px;
+.hidden { display: none !important; }
+
+/* ===== 登录视图 ===== */
+.auth-view {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 360px;
+  background: var(--card);
+  border-radius: 16px;
+  padding: 32px 24px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  text-align: center;
+}
+
+.auth-card h1 {
+  font-size: 26px;
+  margin-bottom: 8px;
+}
+
+.auth-sub {
+  color: var(--muted);
+  font-size: 14px;
+  margin-bottom: 24px;
+}
+
+.auth-card input {
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 15px;
+}
+
+/* ===== 顶部栏 ===== */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.brand {
+  font-weight: 700;
+  font-size: 17px;
+}
+
+.topbar-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* ===== 内容区 ===== */
+.content {
+  max-width: 520px;
   margin: 0 auto;
+  padding: 16px;
+  padding-bottom: 80px; /* 给底部导航留空间 */
 }
 
-h1 {
-  font-size: 20px;
-  margin: 12px 0 16px;
+.view {
+  animation: fadein 0.2s ease;
 }
 
+@keyframes fadein {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ===== 卡片 ===== */
 .card {
-  background: #fff;
+  background: var(--card);
   border-radius: 12px;
   padding: 16px;
   margin-bottom: 16px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
+.card h2 {
+  font-size: 17px;
+  margin-bottom: 12px;
+}
+
+/* ===== 按钮 ===== */
 .btn {
   display: inline-block;
   border: none;
@@ -37,8 +130,6 @@ h1 {
   padding: 10px 16px;
   font-size: 15px;
   cursor: pointer;
-  margin-right: 8px;
-  margin-bottom: 8px;
   background: #e0e0e0;
   color: #333;
 }
@@ -49,45 +140,100 @@ h1 {
 }
 
 .btn-primary {
-  background: #2563eb;
+  background: var(--primary);
   color: #fff;
 }
 
 .btn-primary:disabled {
-  background: #2563eb;
+  background: var(--primary);
 }
 
-.status {
-  font-size: 14px;
-  color: #666;
+.btn-block {
+  width: 100%;
+  padding: 12px;
   margin-top: 4px;
 }
 
-.status.connected {
-  color: #16a34a;
+.btn-link {
+  background: none;
+  color: var(--primary);
+  font-size: 14px;
+  margin-top: 8px;
+}
+
+.btn-small {
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
+.btn:not(:disabled):active {
+  transform: scale(0.98);
+}
+
+/* ===== 底部导航 ===== */
+.tabbar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  background: var(--card);
+  border-top: 1px solid var(--border);
+  padding-bottom: env(safe-area-inset-bottom);
+  z-index: 10;
+}
+
+.tab {
+  flex: 1;
+  border: none;
+  background: none;
+  padding: 8px 0 6px;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.tab span { font-size: 11px; }
+
+.tab.active {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+/* ===== 表单 ===== */
+input, textarea, select {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 15px;
+  font-family: inherit;
+  margin-bottom: 12px;
+}
+
+textarea {
+  resize: vertical;
 }
 
 label {
   display: block;
-  font-size: 14px;
-  margin-bottom: 8px;
-  color: #555;
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 6px;
 }
 
-textarea {
-  width: 100%;
-  border: 1px solid #d0d0d0;
-  border-radius: 8px;
-  padding: 10px;
-  font-size: 15px;
-  font-family: inherit;
-  resize: vertical;
-  margin-bottom: 12px;
-}
-
+/* ===== 日志 / 提示 ===== */
 .log {
   font-size: 13px;
-  color: #999;
+  color: var(--muted);
   white-space: pre-wrap;
   word-break: break-all;
+  margin-top: 8px;
 }
+
+.log.error { color: #dc2626; }
+.log.success { color: var(--green); }
