@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>蓝牙小票打印</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="app">
+    <h1>蓝牙小票打印</h1>
+
+    <!-- 连接区 -->
+    <section class="card">
+      <button id="connectBtn" class="btn btn-primary">连接打印机</button>
+      <button id="disconnectBtn" class="btn" disabled>断开</button>
+      <p id="status" class="status">未连接</p>
+    </section>
+
+    <!-- 内容编辑区 -->
+    <section class="card">
+      <label for="text">打印文本（支持中文、换行）</label>
+      <textarea id="text" rows="8" placeholder="在这里输入要打印的内容&#10;例如：&#10;商品：奶茶 x2&#10;金额：36 元"></textarea>
+
+      <button id="printBtn" class="btn btn-primary" disabled>立即打印</button>
+    </section>
+
+    <p id="log" class="log"></p>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
