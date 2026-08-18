@@ -5,6 +5,8 @@ import * as game from './game.js';
 import * as world from './world.js';
 import * as chronicle from './chronicle.js';
 import * as companion from './companion.js';
+import * as collection from './collection.js';
+import * as territory from './territory.js';
 import { askOracle } from './oracle.js';
 import { getAIConfig, setAIConfig, hasAIKey } from './ai.js';
 import { celebrateReceipt, reviewReceipt, oracleReceipt } from './receipt.js';
@@ -225,16 +227,53 @@ async function renderWorldView() {
   const seasonName = world.SEASON_NAMES[w.season] || '春';
   const phase = world.daytimePhase();
 
+  // 领地状态
+  let territoryHtml = '';
+  try {
+    const t = await territory.getTerritory();
+    const tier = territory.tierForStreak(t.streak || 0);
+    territoryHtml = `
+      <div class="card">
+        <h2>🏰 领地</h2>
+        <p class="log">${tier.emoji} ${tier.name} · 连续行动 ${t.streak || 0} 天</p>
+        <p class="log">已解锁 ${t.unlocked_tiles || 1} 块地</p>
+      </div>
+    `;
+  } catch (e) {
+    territoryHtml = '';
+  }
+
+  // 图鉴状态
+  let collectionHtml = '';
+  try {
+    const collected = await collection.listCollection();
+    const items = await collection.listItems();
+    const total = items.length;
+    const got = collected.length;
+    collectionHtml = `
+      <div class="card">
+        <h2>📖 世界图鉴</h2>
+        <p class="log">已收集 ${got} / ${total}</p>
+        <div class="collection-grid">
+          ${items.map((it) => {
+            const has = collected.some((c) => c.item_id === it.id);
+            return `<div class="collect-item ${has ? '' : 'locked'}">${has ? (it.emoji || '❓') : '❓'}</div>`;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  } catch (e) {
+    collectionHtml = '';
+  }
+
   sec.innerHTML = `
     <div class="card">
       <h2>🏰 王国</h2>
       <p class="log">第 ${w.day_count} 天 · ${seasonEmoji} ${seasonName}季 · ${phase}</p>
       <p class="log">世界之光：${'✨'.repeat(Math.min(10, Math.floor(w.light / 10) + 1))} (${w.light})</p>
     </div>
-    <div class="card">
-      <h2>🗺️ 领地与图鉴</h2>
-      <p class="log">下一步实现</p>
-    </div>
+    ${territoryHtml}
+    ${collectionHtml}
   `;
 }
 
@@ -383,6 +422,10 @@ async function renderTasksView() {
           <option value="4">困难 · +55 XP</option>
           <option value="5">Boss 级 · +80 XP</option>
         </select>
+        <label class="switch-row">
+          <span>⚔️ 这是 Boss 任务（拖了很久的那件，奖励翻倍）</span>
+          <input type="checkbox" id="taskIsBoss">
+        </label>
         <button type="submit" class="btn btn-primary btn-block">接任务</button>
       </form>
     </div>
@@ -398,9 +441,10 @@ async function renderTasksView() {
     e.preventDefault();
     const title = sec.querySelector('#taskTitle').value.trim();
     const difficulty = parseInt(sec.querySelector('#taskDifficulty').value, 10);
+    const isBoss = sec.querySelector('#taskIsBoss').checked;
     if (!title) return;
     try {
-      await game.createTask(title, 'normal', difficulty);
+      await game.createTask(title, isBoss ? 'boss' : 'normal', difficulty);
       sec.querySelector('#taskTitle').value = '';
       await renderTasksView();
     } catch (err) {
@@ -426,8 +470,8 @@ async function renderTasksView() {
   listEl.innerHTML = tasks.map((t) => `
     <li class="task-item">
       <div class="task-info">
-        <span class="task-title">${escapeHtml(t.title)}</span>
-        <span class="task-meta">难度 ${t.difficulty} · +${game.xpForDifficulty(t.difficulty)} XP</span>
+        <span class="task-title">${t.type === 'boss' ? '⚔️ ' : ''}${escapeHtml(t.title)}</span>
+        <span class="task-meta">难度 ${t.difficulty} · +${game.xpForDifficulty(t.difficulty) * (t.type === 'boss' ? 2 : 1)} XP${t.type === 'boss' ? ' · Boss' : ''}</span>
       </div>
       <button class="btn btn-primary btn-small" data-id="${t.id}">完成</button>
     </li>

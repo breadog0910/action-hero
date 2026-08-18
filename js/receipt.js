@@ -85,18 +85,31 @@ function todayStr() {
 
 // ===== 庆祝小票：完成任务 =====
 export function celebrateReceipt(taskTitle, rewards) {
-  return renderReceipt([
-    { text: '🎉 任务完成！', size: 26, align: 'center', bold: true, space: 6 },
-    { divider: true },
-    { text: `「${taskTitle}」`, size: 22, align: 'center', space: 6 },
-    { divider: true },
-    { text: `勇者  +${rewards.xp} XP`, size: 20, space: 2 },
-    { text: `世界之光  +${rewards.light}`, size: 20, space: 2 },
-    { text: `伙伴饱食  +${rewards.feed}`, size: 20, space: 6 },
-    { divider: true },
-    { text: '继续前进，勇者！', size: 20, align: 'center', space: 6 },
-    { text: `行动勇者 · ${todayStr()}`, size: 16, align: 'center' },
-  ]);
+  const lines = [];
+  if (rewards.isBoss) {
+    lines.push({ text: '⚔️ Boss 战胜利！', size: 26, align: 'center', bold: true, space: 6 });
+  } else {
+    lines.push({ text: '🎉 任务完成！', size: 26, align: 'center', bold: true, space: 6 });
+  }
+  lines.push({ divider: true });
+  lines.push({ text: `「${taskTitle}」`, size: 22, align: 'center', space: 6 });
+  lines.push({ divider: true });
+  lines.push({ text: `勇者  +${rewards.xp} XP`, size: 20, space: 2 });
+  lines.push({ text: `世界之光  +${rewards.light}`, size: 20, space: 2 });
+  lines.push({ text: `伙伴饱食  +${rewards.feed}`, size: 20, space: 2 });
+
+  if (rewards.drop) {
+    lines.push({ text: `掉落  ${rewards.drop.emoji || ''} ${rewards.drop.name}`, size: 20, space: 2 });
+  }
+
+  if (rewards.newStreak) {
+    lines.push({ text: `连续行动  ${rewards.newStreak} 天`, size: 18, space: 6 });
+  }
+
+  lines.push({ divider: true });
+  lines.push({ text: rewards.isBoss ? '你打败了最拖延的自己！' : '继续前进，勇者！', size: 20, align: 'center', space: 6 });
+  lines.push({ text: `行动勇者 · ${todayStr()}`, size: 16, align: 'center' });
+  return renderReceipt(lines);
 }
 
 // ===== 复盘小票：今日总结 =====

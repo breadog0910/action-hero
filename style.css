@@ -368,6 +368,30 @@ label {
   color: #999;
 }
 
+/* ===== 图鉴 ===== */
+.collection-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.collect-item {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  border-radius: 10px;
+  background: #fafafa;
+  border: 1px solid var(--border);
+}
+
+.collect-item.locked {
+  opacity: 0.3;
+  filter: grayscale(1);
+}
+
 /* ===== 贤者之书 ===== */
 .oracle-answer {
   font-size: 20px;
