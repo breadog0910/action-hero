@@ -4,7 +4,9 @@ import * as printer from './printer.js';
 import * as game from './game.js';
 import * as world from './world.js';
 import * as chronicle from './chronicle.js';
+import * as companion from './companion.js';
 import { askOracle } from './oracle.js';
+import { getAIConfig, setAIConfig, hasAIKey } from './ai.js';
 import { celebrateReceipt, reviewReceipt, oracleReceipt } from './receipt.js';
 
 // 自动打印开关（存 localStorage，默认开）
@@ -25,9 +27,11 @@ function showView(name) {
   });
   // 切到对应视图时触发渲染
   if (name === 'tasks') renderTasksView();
+  if (name === 'companion') renderCompanionView();
   if (name === 'chronicle') renderChronicleView();
   if (name === 'oracle') renderOracleView();
   if (name === 'world') renderWorldView();
+  if (name === 'settings') renderSettingsView();
 }
 
 function initRouter() {
@@ -92,36 +96,121 @@ function initAuthUI() {
     }
   });
 
-  // 设置页
-  const settingsView = document.getElementById('view-settings');
-  settingsView.innerHTML = `
+  // 设置页首次渲染
+  renderSettingsView();
+}
+
+// ===== 设置视图 =====
+function renderSettingsView() {
+  const sec = document.getElementById('view-settings');
+  const ai = getAIConfig();
+
+  sec.innerHTML = `
     <div class="card">
-      <h2>设置</h2>
+      <h2>⚙️ 设置</h2>
       <label class="switch-row">
         <span>完成任务后自动打印小票</span>
         <input type="checkbox" id="autoPrintSwitch" ${autoPrintOn() ? 'checked' : ''}>
       </label>
+    </div>
+
+    <div class="card">
+      <h2>🤖 AI 配置（可选）</h2>
+      <p class="log">不填也能用（伙伴会用固定回复）。填入后伙伴会变得更懂你。</p>
+      <label for="aiKey">API Key</label>
+      <input id="aiKey" type="password" placeholder="sk-..." value="${escapeHtml(ai.apiKey)}">
+      <label for="aiBaseURL">Base URL</label>
+      <input id="aiBaseURL" type="text" placeholder="https://api.deepseek.com" value="${escapeHtml(ai.baseURL)}">
+      <label for="aiModel">Model</label>
+      <input id="aiModel" type="text" placeholder="deepseek-chat" value="${escapeHtml(ai.model)}">
+      <button id="aiSaveBtn" class="btn btn-primary btn-block">保存 AI 配置</button>
+      <p id="aiStatus" class="log"></p>
+    </div>
+
+    <div class="card">
       <button id="signOutBtn" class="btn">退出登录</button>
     </div>
   `;
-  settingsView.querySelector('#autoPrintSwitch').addEventListener('change', (e) => {
+
+  sec.querySelector('#autoPrintSwitch').addEventListener('change', (e) => {
     localStorage.setItem('autoPrint', e.target.checked ? 'on' : 'off');
   });
-  settingsView.querySelector('#signOutBtn').addEventListener('click', signOut);
+
+  sec.querySelector('#aiSaveBtn').addEventListener('click', () => {
+    const apiKey = sec.querySelector('#aiKey').value.trim();
+    const baseURL = sec.querySelector('#aiBaseURL').value.trim();
+    const model = sec.querySelector('#aiModel').value.trim();
+    setAIConfig({ apiKey, baseURL, model });
+    const status = sec.querySelector('#aiStatus');
+    status.textContent = hasAIKey() ? '✅ AI 已配置' : '已保存（未填 key，伙伴用固定回复）';
+    status.className = 'log success';
+  });
+
+  sec.querySelector('#signOutBtn').addEventListener('click', signOut);
 }
 
-// ===== 视图占位（Phase 3 起逐步替换为真实视图）=====
-function renderPlaceholders() {
-  const placeholders = {
-    companion: '🐣 伙伴：一个陪你成长的生命（下一步实现）',
-  };
-  for (const [id, text] of Object.entries(placeholders)) {
-    const sec = document.getElementById(`view-${id}`);
-    sec.innerHTML = `<div class="card"><h2>${text.split('：')[0]}</h2><p class="log">${text.split('：')[1] || text}</p></div>`;
+// ===== 伙伴视图：状态 + 对话 =====
+async function renderCompanionView() {
+  const sec = document.getElementById('view-companion');
+  let c = null;
+  try {
+    c = await companion.getCompanion();
+  } catch (e) {
+    sec.innerHTML = '<div class="card"><h2>🐣 伙伴</h2><p class="log">加载失败</p></div>';
+    return;
   }
-}
 
-// ===== 王国视图：世界状态 + 领地/图鉴占位 =====
+  const stageName = companion.STAGE_NAMES[c.stage] || '伙伴';
+
+  sec.innerHTML = `
+    <div class="card companion-card">
+      <h2>🐣 ${escapeHtml(c.name)} <span class="stage-badge">${stageName}</span></h2>
+      <div class="companion-stats">
+        <div class="stat"><span>饱食</span><div class="bar"><div class="bar-fill" style="width:${c.hunger}%"></div></div></div>
+        <div class="stat"><span>心情</span><div class="bar"><div class="bar-fill" style="width:${c.mood}%"></div></div></div>
+        <div class="stat"><span>成长</span><div class="bar"><div class="bar-fill" style="width:${(c.growth % 100)}%"></div></div></div>
+      </div>
+      <p class="log">${hasAIKey() ? 'AI 已连接，伙伴会更懂你' : '未配置 AI，伙伴用固定回复（设置里可配）'}</p>
+    </div>
+
+    <div class="card">
+      <h2>💬 和 ${escapeHtml(c.name)} 说话</h2>
+      <div id="chatLog" class="chat-log"></div>
+      <textarea id="chatInput" rows="2" placeholder="告诉伙伴：我完成了什么 / 我今天很累 / 我又拖延了…"></textarea>
+      <button id="chatSendBtn" class="btn btn-primary btn-block">说给伙伴听</button>
+    </div>
+  `;
+
+  const chatLog = sec.querySelector('#chatLog');
+  const chatInput = sec.querySelector('#chatInput');
+
+  async function send() {
+    const text = chatInput.value.trim();
+    if (!text) return;
+    chatInput.value = '';
+    chatLog.insertAdjacentHTML('beforeend', `<div class="chat-bubble me">${escapeHtml(text)}</div>`);
+    chatLog.insertAdjacentHTML('beforeend', `<div class="chat-bubble pending">…</div>`);
+    chatLog.scrollTop = chatLog.scrollHeight;
+
+    try {
+      const reply = await companion.talk(text);
+      const pending = chatLog.querySelector('.pending');
+      if (pending) pending.outerHTML = `<div class="chat-bubble pet">${escapeHtml(reply)}</div>`;
+    } catch (err) {
+      const pending = chatLog.querySelector('.pending');
+      if (pending) pending.outerHTML = `<div class="chat-bubble pet">（出错了：${escapeHtml(err.message)}）</div>`;
+    }
+    chatLog.scrollTop = chatLog.scrollHeight;
+  }
+
+  sec.querySelector('#chatSendBtn').addEventListener('click', send);
+  chatInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      send();
+    }
+  });
+}
 async function renderWorldView() {
   const sec = document.getElementById('view-world');
   let w = null;
@@ -395,7 +484,6 @@ function boot() {
   initAuthUI();
   initRouter();
   initPrinter();
-  renderPlaceholders();
 }
 
 boot();

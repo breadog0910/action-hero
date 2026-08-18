@@ -286,6 +286,88 @@ label {
   transform: scale(1.3);
 }
 
+/* ===== 伙伴 ===== */
+.stage-badge {
+  font-size: 12px;
+  background: var(--gold);
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 10px;
+  vertical-align: middle;
+  margin-left: 4px;
+}
+
+.companion-stats {
+  margin: 12px 0 4px;
+}
+
+.stat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.stat span {
+  width: 32px;
+  flex-shrink: 0;
+}
+
+.bar {
+  flex: 1;
+  height: 10px;
+  background: #eee;
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  background: var(--green);
+  border-radius: 5px;
+  transition: width 0.3s ease;
+}
+
+.chat-log {
+  max-height: 300px;
+  overflow-y: auto;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chat-bubble {
+  max-width: 80%;
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.chat-bubble.me {
+  align-self: flex-end;
+  background: var(--primary);
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+
+.chat-bubble.pet {
+  align-self: flex-start;
+  background: #f0f0f0;
+  color: #333;
+  border-bottom-left-radius: 4px;
+}
+
+.chat-bubble.pending {
+  align-self: flex-start;
+  background: #f0f0f0;
+  color: #999;
+}
+
 /* ===== 贤者之书 ===== */
 .oracle-answer {
   font-size: 20px;
