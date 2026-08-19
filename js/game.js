@@ -15,6 +15,10 @@ export function xpForDifficulty(d) {
   return XP_BY_DIFFICULTY[d] || XP_BY_DIFFICULTY[1];
 }
 
+export function lightForDifficulty(d) {
+  return LIGHT_BY_DIFFICULTY[d] || LIGHT_BY_DIFFICULTY[1];
+}
+
 export async function getProfile() {
   const sb = getClient();
   const { data: { user } } = await sb.auth.getUser();
@@ -134,4 +138,69 @@ export async function completeTask(task) {
     drop,
     newStreak,
   };
+}
+
+// 完成一次专注（番茄钟）：不依赖任务表
+// 专注 25 分钟 ≈ 难度 1 的奖励；时长越长奖励按比例上浮（向上取整到 5）
+export async function recordFocus(minutes, goal = '') {
+  const sb = getClient();
+  const { data: { user } } = await sb.auth.getUser();
+  const userId = user.id;
+
+  const baseXp = 10, baseLight = 5;
+  const scale = Math.max(1, minutes / 25);
+  const xp = Math.round((baseXp * scale) / 5) * 5;
+  const light = Math.round((baseLight * scale) / 5) * 5;
+  const feed = Math.round(FEED_PER_TASK / 2);
+
+  // 连续生长
+  let newStreak = 0;
+  try {
+    newStreak = await recordAction();
+  } catch (e) {
+    console.warn('连续生长更新失败：', e);
+  }
+
+  // 读当前值 + 结算
+  const [profileRes, worldRes, companionRes] = await Promise.all([
+    sb.from('profiles').select('xp, level').eq('id', userId).single(),
+    sb.from('world').select('light').eq('user_id', userId).single(),
+    sb.from('companion').select('hunger, mood').eq('user_id', userId).single(),
+  ]);
+
+  const newXp = (profileRes.data.xp || 0) + xp;
+  const newLevel = Math.floor(newXp / XP_PER_LEVEL) + 1;
+  const newLight = (worldRes.data.light || 0) + light;
+  const newHunger = Math.min(100, (companionRes.data.hunger || 0) + feed);
+  const newMood = Math.min(100, (companionRes.data.mood || 0) + Math.round(feed / 2));
+
+  const content = goal
+    ? `完成 ${minutes} 分钟专注「${goal}」`
+    : `完成 ${minutes} 分钟专注时光`;
+
+  await Promise.all([
+    sb.from('profiles').update({ xp: newXp, level: newLevel }).eq('id', userId),
+    sb.from('world').update({ light: newLight }).eq('user_id', userId),
+    sb.from('companion').update({
+      hunger: newHunger,
+      mood: newMood,
+      last_fed_at: new Date().toISOString(),
+    }).eq('user_id', userId),
+    sb.from('actions').insert({
+      user_id: userId,
+      task_id: null,
+      xp,
+      light,
+      feed,
+      drop_id: null,
+    }),
+    sb.from('chronicle').insert({
+      user_id: userId,
+      type: 'action',
+      content,
+      meta: { minutes, goal, focus: true, xp, light },
+    }),
+  ]);
+
+  return { xp, light, feed, newLevel, newStreak, minutes, goal };
 }

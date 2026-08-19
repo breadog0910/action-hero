@@ -43,6 +43,42 @@ create table if not exists public.tasks (
   created_at timestamptz not null default now()
 );
 
+-- ---------- 4.5 剧情任务线（player_quests）----------
+-- 玩家按章节推进的剧情任务；任务码为 12 位字符码（QST + 9 位序号），
+-- UI 可直接引用（如 QST000000001），适合作为跨端标识与深链参数。
+create table if not exists public.player_quests (
+  id text primary key,                        -- 12 位任务码：QST + 9 位序号
+  user_id uuid not null references auth.users(id) on delete cascade,
+  chapter text not null default '序章',        -- 章节名（如 序章/第一章）
+  title text not null,                         -- 剧情任务标题
+  description text,                            -- 剧情描述
+  objective text,                              -- 完成条件说明
+  progress int not null default 0,             -- 当前进度
+  progress_target int not null default 1,      -- 目标进度
+  rewards jsonb not null default '{}'::jsonb,  -- 奖励 {xp, light, item_id}
+  status text not null default 'locked',       -- locked/active/completed/claimed
+  sort_order int not null default 0,           -- 剧情推进顺序
+  started_at timestamptz,
+  completed_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+comment on table public.player_quests is '剧情任务线：玩家按章节推进的故事任务，任务码为 12 位字符（QST+9位数字）';
+comment on column public.player_quests.id is '12 位任务码，如 QST000000001，UI 可直接引用';
+comment on column public.player_quests.user_id is '所属玩家（auth.users.id）';
+comment on column public.player_quests.chapter is '所属章节';
+comment on column public.player_quests.title is '剧情任务标题';
+comment on column public.player_quests.description is '剧情描述';
+comment on column public.player_quests.objective is '完成条件说明';
+comment on column public.player_quests.progress is '当前进度';
+comment on column public.player_quests.progress_target is '目标进度';
+comment on column public.player_quests.rewards is '完成奖励 {xp, light, item_id}';
+comment on column public.player_quests.status is '状态：locked/active/completed/claimed';
+comment on column public.player_quests.sort_order is '剧情顺序，数值小者在前';
+comment on column public.player_quests.started_at is '接取（激活）时间';
+comment on column public.player_quests.completed_at is '完成时间';
+comment on column public.player_quests.created_at is '记录创建时间';
+
 -- ---------- 5. 行动结算（世界的一束光）----------
 create table if not exists public.actions (
   id uuid primary key default gen_random_uuid(),
@@ -105,6 +141,7 @@ create table if not exists public.receipts (
 -- 索引
 -- =====================================================
 create index if not exists idx_tasks_user on public.tasks(user_id);
+create index if not exists idx_player_quests_user on public.player_quests(user_id, sort_order);
 create index if not exists idx_actions_user on public.actions(user_id, created_at);
 create index if not exists idx_chronicle_user on public.chronicle(user_id, date);
 create index if not exists idx_receipts_user on public.receipts(user_id, created_at);
@@ -116,6 +153,7 @@ alter table public.profiles enable row level security;
 alter table public.world enable row level security;
 alter table public.companion enable row level security;
 alter table public.tasks enable row level security;
+alter table public.player_quests enable row level security;
 alter table public.actions enable row level security;
 alter table public.chronicle enable row level security;
 alter table public.collection enable row level security;
@@ -142,7 +180,7 @@ drop policy if exists "territory_own" on public.territory;
 create policy "territory_own" on public.territory
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
--- tasks / actions / chronicle / receipts（用户列 = user_id，带自增 id）
+-- tasks / player_quests / actions / chronicle / receipts（用户列 = user_id，带 id）
 drop policy if exists "tasks_own" on public.tasks;
 create policy "tasks_own" on public.tasks
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
@@ -154,6 +192,9 @@ create policy "chronicle_own" on public.chronicle
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 drop policy if exists "receipts_own" on public.receipts;
 create policy "receipts_own" on public.receipts
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+drop policy if exists "player_quests_own" on public.player_quests;
+create policy "player_quests_own" on public.player_quests
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 -- collection（复合主键，无独立 id，用户列 = user_id）

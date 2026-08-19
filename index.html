@@ -3,60 +3,311 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>行动勇者 · 一个会生长的世界</title>
+  <title>行动勇者 · 手绘绘本世界</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+
   <!-- ===== 登录 / 注册视图 ===== -->
-  <div id="authView" class="auth-view" hidden>
+  <div id="authView" class="auth-stage">
     <main class="auth-card">
-      <h1>⚔️ 行动勇者</h1>
+      <img class="auth-hero" src="assets/images/hero-full.png" alt="行动勇者">
+      <h1>行动勇者</h1>
       <p class="auth-sub">你的现实生活，是这个世界的养分</p>
 
       <form id="authForm">
         <input id="authEmail" type="email" placeholder="邮箱" required autocomplete="email">
         <input id="authPassword" type="password" placeholder="密码（至少 6 位）" required autocomplete="current-password" minlength="6">
-        <button type="submit" class="btn btn-primary btn-block" id="authSubmit">登录</button>
+        <button type="submit" class="btn btn-primary btn-block" id="authSubmit">登 录</button>
       </form>
 
       <button id="authToggle" class="btn btn-link">还没有账号？注册</button>
-      <button id="diagBtn" type="button" class="btn btn-link">🔍 检测网络连接</button>
+      <button id="diagBtn" type="button" class="btn btn-link">检查网络连接</button>
       <p id="authMsg" class="log"></p>
     </main>
   </div>
 
-  <!-- ===== 主应用视图 ===== -->
-  <div id="appView" hidden>
-    <header class="topbar">
-      <span class="brand">⚔️ 行动勇者</span>
-      <div class="topbar-actions">
-        <button id="printerBtn" class="btn btn-small">🖨️ <span id="printerState">未连接</span></button>
-        <button id="settingsBtn" class="btn btn-small">⚙️</button>
-      </div>
-    </header>
+  <!-- ===== 主应用：400×880 手机画布（等比缩放） ===== -->
+  <div id="appView" class="phone" hidden>
 
-    <main class="content">
-      <!-- 勇者之路：任务 -->
-      <section id="view-tasks" class="view"></section>
-      <!-- 伙伴 -->
-      <section id="view-companion" class="view" hidden></section>
-      <!-- 王国：领地 + 图鉴 -->
-      <section id="view-world" class="view" hidden></section>
-      <!-- 编年史：日记 / 复盘 -->
-      <section id="view-chronicle" class="view" hidden></section>
-      <!-- 贤者之书：答案之书 -->
-      <section id="view-oracle" class="view" hidden></section>
-      <!-- 设置 -->
-      <section id="view-settings" class="view" hidden></section>
+    <main class="screen-stage">
+
+    <!-- 屏幕：主基地·世界地图 -->
+    <section id="screen-hub" class="screen screen-hub">
+      <header class="statusbar">
+        <div class="status-profile">
+          <div class="avatar"><img src="assets/images/hero-avatar.png" alt="勇者头像"></div>
+          <div class="profile-text">
+            <span class="profile-name" id="heroName">勇者</span>
+            <span class="profile-level" id="heroLevel">Lv.1</span>
+          </div>
+        </div>
+        <div class="status-currency">
+          <span class="chip" title="世界之光">
+            <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M7 1L8.8 4.7L12.9 5.2L9.9 8L10.8 12L7 9.9L3.2 12L4.1 8L1.1 5.2L5.2 4.7Z" fill="#E6BF59" stroke="#C79933" stroke-width="0.8"/></svg>
+            <span id="lightCount">—</span>
+          </span>
+          <span class="chip" title="世界天数">
+            <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><rect x="1.5" y="2.5" width="11" height="10" rx="2" stroke="#855938" stroke-width="1.4"/><path d="M1.5 5.5H12.5M4.5 1.5V3.5M9.5 1.5V3.5" stroke="#855938" stroke-width="1.4" stroke-linecap="round"/></svg>
+            <span id="dayCount">—</span>
+          </span>
+          <button class="icon-btn icon-settings" data-goto="settings" title="更多" aria-label="更多">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="2.6" stroke="#6B4F3A" stroke-width="1.6"/><path d="M9 1.8V4M9 14V16.2M16.2 9H14M4 9H1.8M14.1 3.9L12.5 5.5M5.5 12.5L3.9 14.1M14.1 14.1L12.5 12.5M5.5 5.5L3.9 3.9" stroke="#6B4F3A" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <div class="island-map">
+        <img src="assets/images/hub-map.png" alt="浮岛世界地图">
+        <button class="map-marker" style="left:15%;top:26.9%" data-goto="plan">
+          <span class="marker-name">计划驿站</span><span class="marker-sub" id="markerPlanSub">任务清单</span>
+        </button>
+        <button class="map-marker" style="left:65%;top:25%" data-goto="focus">
+          <span class="marker-name">专注矿洞</span><span class="marker-sub">专注计时</span>
+        </button>
+        <button class="map-marker" style="left:40%;top:38.5%" data-goto="honor">
+          <span class="marker-name">荣耀碑</span><span class="marker-sub">回顾世界荣耀</span>
+        </button>
+        <button class="map-marker" style="left:24%;top:48%" data-goto="oracle">
+          <span class="marker-name">答案之书</span><span class="marker-sub">心中的答案</span>
+        </button>
+        <button class="map-marker" style="left:12.5%;top:61.5%" data-goto="memory">
+          <span class="marker-name">回忆小屋</span><span class="marker-sub" id="markerMemorySub">时光相册</span>
+        </button>
+        <button class="map-marker" style="left:67.5%;top:59.6%" data-goto="shop">
+          <span class="marker-name">收集小铺</span><span class="marker-sub" id="markerShopSub">收集图鉴</span>
+        </button>
+        <button class="map-marker" style="left:7.5%;top:85.8%" data-goto="worldmap">
+          <span class="marker-name">远航码头</span><span class="marker-sub">即将开放</span>
+        </button>
+        <button class="map-marker" style="left:60%;top:83.8%" data-goto="print">
+          <span class="marker-name">星光打印机</span><span class="marker-sub">打印小票</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- 屏幕：计划大厅 -->
+    <section id="screen-plan" class="screen" hidden>
+      <header class="subheader">
+        <button class="icon-btn icon-back" data-back="hub" aria-label="返回"><svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M11 3L5 9L11 15" stroke="#59381E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <h1 class="sub-title">计划驿站</h1>
+      </header>
+      <div class="scene"><img src="assets/images/plan-hero.png" alt="计划驿站场景"></div>
+      <div class="content" id="planContent"><!-- 任务卡片（main.js 渲染） --></div>
+    </section>
+
+    <!-- 屏幕：专注工坊 -->
+    <section id="screen-focus" class="screen" hidden>
+      <header class="subheader">
+        <button class="icon-btn icon-back" data-back="hub" aria-label="返回"><svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M11 3L5 9L11 15" stroke="#59381E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <h1 class="sub-title">专注矿洞</h1>
+      </header>
+      <div class="scene"><img src="assets/images/focus-scene.png" alt="专注矿洞场景"></div>
+      <div class="content">
+        <div class="focus-card">
+          <div class="focus-head">
+            <span class="focus-duration"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="#855938" stroke-width="1.6"/><path d="M8 4.5V8L10.5 9.5" stroke="#855938" stroke-width="1.6" stroke-linecap="round"/></svg><span id="focusDurLabel">25 分钟</span></span>
+            <div class="focus-preset" id="focusPreset">
+              <button class="preset-chip" data-min="15">15分</button>
+              <button class="preset-chip active" data-min="25">25分</button>
+              <button class="preset-chip" data-min="45">45分</button>
+            </div>
+          </div>
+          <input id="focusGoal" type="text" placeholder="这次想专注做什么？（可选）">
+          <span class="focus-timer" id="focusTimer">25:00</span>
+          <div class="focus-controls">
+            <button class="btn btn-primary btn-focus" id="focusStartBtn">开始专注</button>
+            <button class="btn btn-secondary btn-focus" id="focusResetBtn" hidden>重置</button>
+          </div>
+          <p class="focus-hint" id="focusHint"></p>
+        </div>
+        <div class="stat-row">
+          <div class="stat-card"><span class="stat-num" id="statActionCount">—<i>次</i></span><span class="stat-label">今日行动</span></div>
+          <div class="stat-card"><span class="stat-num" id="statTodayXp">—<i>XP</i></span><span class="stat-label">今日经验</span></div>
+          <div class="stat-card"><span class="stat-num" id="statTodayLight">—<i>点</i></span><span class="stat-label">今日世界之光</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 屏幕：打印工坊 -->
+    <section id="screen-print" class="screen" hidden>
+      <header class="subheader">
+        <button class="icon-btn icon-back" data-back="hub" aria-label="返回"><svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M11 3L5 9L11 15" stroke="#59381E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <h1 class="sub-title">打印工坊</h1>
+      </header>
+      <div class="scene"><img src="assets/images/print-scene.png" alt="打印工坊场景"></div>
+      <div class="content">
+        <div class="progress-block">
+          <div class="progress-head"><span>世界之光（每 100 点世界更亮一分）</span><span class="progress-count" id="lightTotal">—</span></div>
+          <div class="bar bar-track"><div class="bar-fill fill-gold" id="lightBar" style="width:0%"></div></div>
+        </div>
+        <div class="print-actions">
+          <button id="printerBtn" class="btn btn-secondary"><span id="printerState">连接打印机</span></button>
+          <button id="printTicketBtn" class="btn btn-primary">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="5" width="12" height="6" rx="1.5" stroke="#FCF7ED" stroke-width="1.6"/><rect x="4.5" y="1.5" width="7" height="4" rx="1" stroke="#FCF7ED" stroke-width="1.6"/><rect x="4.5" y="9.5" width="7" height="4.5" rx="1" stroke="#FCF7ED" stroke-width="1.6"/></svg>
+            打印今日小票
+          </button>
+        </div>
+        <div class="ticket-card">
+          <div class="ticket-head">—— 行动勇者 · 今日小票 ——</div>
+          <div id="ticketRows"><!-- 今日结算数据（main.js 渲染） --></div>
+          <div class="ticket-foot">✦ 今天的勇者也很努力 ✦</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 屏幕：世界地图探索 -->
+    <section id="screen-worldmap" class="screen" hidden>
+      <header class="subheader">
+        <button class="icon-btn icon-back" data-back="hub" aria-label="返回"><svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M11 3L5 9L11 15" stroke="#59381E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <h1 class="sub-title">世界地图</h1>
+      </header>
+      <div class="scene scene-grow"><img src="assets/images/world-map.png" alt="世界地图"></div>
+      <div class="content">
+        <div id="regionList"><!-- 区域卡（main.js 按真实数据渲染解锁状态） --></div>
+      </div>
+    </section>
+
+    <!-- 屏幕：区域详情·迷雾森林 -->
+    <section id="screen-region" class="screen" hidden>
+      <header class="subheader">
+        <button class="icon-btn icon-back" data-back="worldmap" aria-label="返回"><svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M11 3L5 9L11 15" stroke="#59381E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <h1 class="sub-title">迷雾森林</h1>
+        <span class="level-tag" id="regionLevel">Lv.1</span>
+      </header>
+      <div class="scene scene-tall"><img src="assets/images/forest-scene.png" alt="迷雾森林场景"></div>
+      <div class="content">
+        <p class="region-desc">薄雾笼罩的初学者森林，栖息着害羞的犹豫史莱姆。穿过林间小径，收集勇气晨露，找到通往静谧湖畔的路。</p>
+        <h2 class="section-title">区域挑战</h2>
+        <div id="regionChallenges" style="display:flex;flex-direction:column;gap:10px;"><!-- 挑战进度（main.js 按真实数据渲染） --></div>
+        <button class="btn btn-primary btn-explore">进入探索</button>
+      </div>
+    </section>
+
+    <!-- 屏幕：答案之书 -->
+    <section id="screen-oracle" class="screen" hidden>
+      <header class="subheader">
+        <button class="icon-btn icon-back" data-back="hub" aria-label="返回"><svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M11 3L5 9L11 15" stroke="#59381E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <h1 class="sub-title">答案之书</h1>
+      </header>
+      <div class="scene"><img src="assets/images/board-scene.png" alt="答案之书场景"></div>
+      <div class="content">
+        <div class="section-head">
+          <h2 class="section-title">今日启示</h2>
+          <span class="section-count" id="oracleCount">尚未翻开</span>
+        </div>
+        <div class="oracle-card">
+          <div class="oracle-book" id="oracleBook">
+            <span class="oracle-bookmark">✦</span>
+            <span class="oracle-answer" id="oracleAnswer">心里有疑问时，轻轻翻开一页。</span>
+          </div>
+          <input id="oracleQuestion" type="text" placeholder="心中想问什么？（可选，记录进编年史）" maxlength="60">
+          <button class="btn btn-primary btn-block" id="oracleBtn">翻开答案</button>
+          <p class="oracle-hint" id="oracleHint"></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 屏幕：回忆小屋 -->
+    <section id="screen-memory" class="screen" hidden>
+      <header class="subheader">
+        <button class="icon-btn icon-back" data-back="hub" aria-label="返回"><svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M11 3L5 9L11 15" stroke="#59381E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <h1 class="sub-title">回忆小屋</h1>
+      </header>
+      <div class="scene"><img src="assets/images/house-scene.png" alt="回忆小屋场景"></div>
+      <div class="content">
+        <div class="entry-row">
+          <button class="entry-card entry-journal" id="entryJournal">
+            <span class="entry-icon">📖</span>
+            <span class="entry-info"><span class="entry-name">我的日记</span><span class="entry-sub">记录今日心情</span></span>
+            <span class="entry-arrow">›</span>
+          </button>
+          <button class="entry-card entry-sprite" id="entrySprite">
+            <span class="entry-icon">🧚</span>
+            <span class="entry-info"><span class="entry-name">神奇精灵</span><span class="entry-sub">秘密日记 · 精灵会回复你</span></span>
+            <span class="entry-arrow">›</span>
+          </button>
+        </div>
+        <div class="section-head">
+          <h2 class="section-title">时光相册</h2>
+          <span class="section-count" id="memoryCount"></span>
+          <button class="btn btn-secondary btn-small" id="journalBtn" hidden>
+            <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2.5 11.5L6.5 3.5L10.5 11.5M4 7.5H9" stroke="#855938" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            写日记
+          </button>
+        </div>
+        <div class="journal-form" id="journalForm" hidden>
+          <textarea id="journalText" rows="3" maxlength="200" placeholder="今天发生了什么？写进世界的记忆里…"></textarea>
+          <div class="journal-actions">
+            <span class="journal-count" id="journalCount">0 / 200</span>
+            <button class="btn btn-secondary btn-small" id="journalCancel">取消</button>
+            <button class="btn btn-primary btn-small" id="journalSave">保存回忆</button>
+          </div>
+        </div>
+        <div id="memoryList"><!-- 回忆卡（main.js 渲染） --></div>
+      </div>
+    </section>
+
+    <!-- 屏幕：收集小铺 -->
+    <section id="screen-shop" class="screen" hidden>
+      <header class="subheader">
+        <button class="icon-btn icon-back" data-back="hub" aria-label="返回"><svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M11 3L5 9L11 15" stroke="#59381E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <h1 class="sub-title">收集小铺</h1>
+      </header>
+      <div class="scene"><img src="assets/images/shop-scene.png" alt="收集小铺场景"></div>
+      <div class="content">
+        <div class="section-head"><h2 class="section-title">收集橱窗</h2><span class="section-count" id="shopCount"></span></div>
+        <div class="filter-row" id="shopFilter" hidden>
+          <button class="filter-chip active" data-rarity="">全部</button>
+          <button class="filter-chip" data-rarity="common">⚪ 普通</button>
+          <button class="filter-chip" data-rarity="uncommon">🟢 稀有</button>
+          <button class="filter-chip" data-rarity="rare">🔵 珍贵</button>
+          <button class="filter-chip" data-rarity="epic">🟣 史诗</button>
+          <button class="filter-chip" data-rarity="legendary">🟡 传说</button>
+        </div>
+        <div class="collect-grid" id="collectGrid"><!-- 收集卡（main.js 渲染） --></div>
+        <div class="progress-block">
+          <div class="progress-head"><span>收藏进度</span><span class="progress-count" id="shopProgressText">—</span></div>
+          <div class="bar bar-track"><div class="bar-fill fill-gold" id="shopProgressFill" style="width:0%"></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 屏幕：荣耀碑 · 成就总结 -->
+    <section id="screen-honor" class="screen" hidden>
+      <header class="subheader">
+        <button class="icon-btn icon-back" data-back="hub" aria-label="返回"><svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M11 3L5 9L11 15" stroke="#59381E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <h1 class="sub-title">荣耀碑</h1>
+      </header>
+      <div class="scene scene-tall"><img src="assets/images/world-map.png" alt="荣耀碑场景"></div>
+      <div class="content">
+        <div class="section-head">
+          <h2 class="section-title">世界足迹</h2>
+          <span class="section-count" id="honorCount">—</span>
+        </div>
+        <div id="honorList" style="display:flex;flex-direction:column;gap:10px;"><!-- 成就卡（main.js 渲染） --></div>
+      </div>
+    </section>
+
+    <!-- 屏幕：更多 · 设置 -->
+    <section id="screen-settings" class="screen" hidden>
+      <header class="subheader">
+        <button class="icon-btn icon-back" data-back="hub" aria-label="返回"><svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M11 3L5 9L11 15" stroke="#59381E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <h1 class="sub-title">更多</h1>
+      </header>
+      <div class="scene scene-hero"><img src="assets/images/hero-full.png" alt="行动勇者"></div>
+      <div class="content" id="settingsContent"><!-- 设置卡片（main.js 渲染） --></div>
+    </section>
+
     </main>
 
-    <nav class="tabbar">
-      <button class="tab" data-view="tasks">🧭<span>勇者</span></button>
-      <button class="tab" data-view="companion">🐣<span>伙伴</span></button>
-      <button class="tab" data-view="world">🏰<span>王国</span></button>
-      <button class="tab" data-view="chronicle">📜<span>编年史</span></button>
-      <button class="tab" data-view="oracle">🔮<span>贤者书</span></button>
-    </nav>
+    <!-- 全局绘本风弹层（结算 / 探索 / 提示统一使用） -->
+    <div class="modal-mask" id="modalMask" hidden>
+      <div class="modal-card" role="dialog" aria-modal="true">
+        <button class="modal-close" id="modalClose" aria-label="关闭"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2.5 2.5L11.5 11.5M11.5 2.5L2.5 11.5" stroke="#855938" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+        <div id="modalBody"></div>
+      </div>
+    </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>

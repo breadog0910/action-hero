@@ -42,6 +42,28 @@ export async function getTodayActions() {
   return data || [];
 }
 
+// 最近的编年史条目（回忆小屋展示用）
+export async function listRecent(limit = 10) {
+  const sb = getClient();
+  const { data, error } = await sb
+    .from('chronicle')
+    .select('id, type, content, date, created_at')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data || [];
+}
+
+// 编年史总条数
+export async function countEntries() {
+  const sb = getClient();
+  const { count, error } = await sb
+    .from('chronicle')
+    .select('id', { count: 'exact', head: true });
+  if (error) throw error;
+  return count || 0;
+}
+
 // 取今天的编年史全部条目
 export async function getTodayEntries() {
   const today = todayStr();
