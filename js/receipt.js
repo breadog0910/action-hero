@@ -1,5 +1,6 @@
 // ===== 小票渲染模块 =====
 // 把结构化内容渲染成 384 点宽的黑白位图，供 printer.printRaster 打印
+// 同时导出「行构建函数」（*Lines），小票册用同一份行数据渲染绘本风卡片，保证画风统一
 
 const PAPER_WIDTH = 384;
 const PADDING = 16;
@@ -84,7 +85,7 @@ function todayStr() {
 }
 
 // ===== 庆祝小票：完成任务 =====
-export function celebrateReceipt(taskTitle, rewards) {
+export function celebrateLines(taskTitle, rewards) {
   const lines = [];
   if (rewards.isBoss) {
     lines.push({ text: '⚔️ Boss 战胜利！', size: 26, align: 'center', bold: true, space: 6 });
@@ -109,11 +110,15 @@ export function celebrateReceipt(taskTitle, rewards) {
   lines.push({ divider: true });
   lines.push({ text: rewards.isBoss ? '你打败了最拖延的自己！' : '继续前进，勇者！', size: 20, align: 'center', space: 6 });
   lines.push({ text: `行动勇者 · ${todayStr()}`, size: 16, align: 'center' });
-  return renderReceipt(lines);
+  return lines;
+}
+
+export function celebrateReceipt(taskTitle, rewards) {
+  return renderReceipt(celebrateLines(taskTitle, rewards));
 }
 
 // ===== 复盘小票：今日总结 =====
-export function reviewReceipt({ date, actions, entries }) {
+export function reviewLines({ date, actions, entries }) {
   const lines = [
     { text: '🌙 今日复盘', size: 26, align: 'center', bold: true, space: 6 },
     { divider: true },
@@ -147,11 +152,15 @@ export function reviewReceipt({ date, actions, entries }) {
   lines.push({ divider: true });
   lines.push({ text: '明天，世界继续生长', size: 18, align: 'center', space: 6 });
   lines.push({ text: `行动勇者 · ${todayStr()}`, size: 16, align: 'center' });
-  return renderReceipt(lines);
+  return lines;
+}
+
+export function reviewReceipt(input) {
+  return renderReceipt(reviewLines(input));
 }
 
 // ===== 答案小票：贤者之书 =====
-export function oracleReceipt({ question, answer }) {
+export function oracleLines({ question, answer }) {
   const lines = [
     { text: '🔮 贤者之书', size: 26, align: 'center', bold: true, space: 6 },
     { divider: true },
@@ -164,5 +173,9 @@ export function oracleReceipt({ question, answer }) {
   lines.push({ text: answer, size: 22, align: 'center', space: 8 });
   lines.push({ divider: true });
   lines.push({ text: `行动勇者 · ${todayStr()}`, size: 16, align: 'center' });
-  return renderReceipt(lines);
+  return lines;
+}
+
+export function oracleReceipt(input) {
+  return renderReceipt(oracleLines(input));
 }

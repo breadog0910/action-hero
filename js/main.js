@@ -7,20 +7,30 @@ import * as collection from './collection.js';
 import { getTerritory, tierForStreak } from './territory.js';
 import { getWorld, rolloverDay, SEASON_NAMES, SEASON_EMOJI, seasonForDay, daytimePhase } from './world.js';
 import { getAIConfig, setAIConfig, hasAIKey } from './ai.js';
-import { celebrateReceipt, reviewReceipt } from './receipt.js';
+import { celebrateLines, reviewLines, renderReceipt } from './receipt.js';
+import * as album from './album.js';
 import { drawAnswer, askOracle } from './oracle.js';
 import { talk as talkSprite } from './companion.js';
 
-// ===== 画布等比缩放：400 × 880 =====
+// ===== 画布全屏贴合：400 × 880 设计稿 =====
+// 主流全面屏手机（宽高比与设计稿 0.455 偏差 ≤4%）→ 覆盖填满整屏，裁剪 ≤2% 无感；
+// 特殊比例（16:9 老机 / 平板 / 横屏 / 桌面）→ 完整显示，背景与应用同色，视觉无缝。
 function fitPhone() {
   const phone = document.getElementById('appView');
-  const scale = Math.min(window.innerWidth / 400, window.innerHeight / 880);
-  phone.style.transform = `translate(-50%, -50%) scale(${Math.min(scale, 1.1)})`;
+  if (!phone) return;
+  const vw = window.visualViewport?.width ?? window.innerWidth;
+  const vh = window.visualViewport?.height ?? window.innerHeight;
+  const ratio = vw / vh;
+  const coverable = ratio <= (400 / 880) * 1.04; // 0.455 × 1.04 ≈ 0.473
+  const scale = coverable ? Math.max(vw / 400, vh / 880) : Math.min(vw / 400, vh / 880);
+  phone.style.transform = `translate(-50%, -50%) scale(${scale})`;
 }
 window.addEventListener('resize', fitPhone);
+window.addEventListener('orientationchange', () => setTimeout(fitPhone, 120));
+if (window.visualViewport) window.visualViewport.addEventListener('resize', fitPhone);
 
 // ===== 屏幕路由 =====
-const screens = ['hub', 'plan', 'focus', 'print', 'worldmap', 'region', 'oracle', 'memory', 'shop', 'honor', 'settings'];
+const screens = ['hub', 'plan', 'focus', 'print', 'album', 'worldmap', 'region', 'oracle', 'memory', 'shop', 'honor', 'settings'];
 
 function showScreen(name) {
   screens.forEach((s) => {
@@ -34,7 +44,8 @@ function showScreen(name) {
   if (name === 'settings') renderSettingsView();
   if (name === 'hub') renderHubStatus();
   if (name === 'focus') renderFocusView();
-  if (name === 'print') renderPrintView();
+  if (name === 'print') { renderPrintView(); album.updateAlbumBadge(); }
+  if (name === 'album') album.renderAlbumView();
   if (name === 'worldmap') renderWorldmapView();
   if (name === 'region') renderRegionView();
   if (name === 'oracle') renderOracleView();
@@ -230,11 +241,17 @@ async function renderPlanView() {
       btn.disabled = true;
       try {
         const rewards = await game.completeTask(task);
-        try {
-          if (autoPrintOn() && printer.isConnected()) {
-            await printer.printRaster(celebrateReceipt(rewards.taskTitle, rewards));
+        if (autoPrintOn()) {
+          // 无论是否打印成功，庆祝小票先进小票册
+          const lines = celebrateLines(rewards.taskTitle, rewards);
+          try {
+            await album.saveTicket({ kind: 'celebrate', title: rewards.isBoss ? 'Boss 战胜利' : '任务完成', date: chronicle.todayStr(), lines });
+            album.updateAlbumBadge();
+          } catch (e) { console.warn('小票存档失败（不影响任务记录）：', e); }
+          if (printer.isConnected()) {
+            try { await printer.printRaster(renderReceipt(lines)); } catch (perr) { console.error('打印失败（不影响任务记录）：', perr); }
           }
-        } catch (perr) { console.error('打印失败（不影响任务记录）：', perr); }
+        }
         renderHubStatus();
         openModal(rewardModalHtml(rewards));
         const okBtn = document.getElementById('rewardOkBtn');
@@ -1148,10 +1165,7 @@ function initPrinter() {
   }
 
   btn.addEventListener('click', async () => {
-    if (!printer.isSupported()) {
-      alert('当前浏览器不支持 Web Bluetooth（需 Chrome/Edge/Safari，且为 HTTPS 或 localhost）');
-      return;
-    }
+    if (!printer.isSupported()) return; // 降级模式：按钮已禁用
     if (printer.isConnected()) {
       printer.disconnect();
       return;
@@ -1163,20 +1177,41 @@ function initPrinter() {
   printer.onDisconnect(renderState);
   renderState();
 
-  // 打印今日小票
+  // 打印今日小票：无论打印是否成功，先存档进小票册
   document.getElementById('printTicketBtn').addEventListener('click', async () => {
+    const actions = await chronicle.getTodayActions();
+    const entries = await chronicle.getTodayEntries();
+    const date = chronicle.todayStr();
+    const lines = reviewLines({ date, actions, entries });
+    try {
+      await album.saveTicket({ kind: 'review', title: '今日复盘', date, lines });
+      album.updateAlbumBadge();
+    } catch (e) { console.warn('小票存档失败：', e); }
+    if (!printer.isSupported()) {
+      await album.shareTicket(lines, '行动勇者 · 今日小票');
+      return;
+    }
     if (!printer.isConnected()) {
-      alert('请先连接打印机');
+      alert('打印机未连接，小票已存入小票册，可随时从小票册查看或打印');
       return;
     }
     try {
-      const actions = await chronicle.getTodayActions();
-      const entries = await chronicle.getTodayEntries();
-      await printer.printRaster(reviewReceipt({ date: chronicle.todayStr(), actions, entries }));
+      await printer.printRaster(renderReceipt(lines));
     } catch (err) {
-      alert('打印失败：' + err.message);
+      alert('打印失败：' + err.message + '（小票已存入小票册）');
     }
   });
+
+  // 不支持蓝牙：切换为「生成小票图片」降级模式
+  if (!printer.isSupported()) {
+    btn.disabled = true;
+    btn.classList.add('disabled');
+    stateEl.textContent = '此设备不支持蓝牙';
+    const tip = document.getElementById('printFallbackTip');
+    if (tip) tip.hidden = false;
+    const ticketBtn = document.getElementById('printTicketBtn');
+    if (ticketBtn) ticketBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="5" width="12" height="6" rx="1.5" stroke="#FCF7ED" stroke-width="1.6"/><rect x="4.5" y="1.5" width="7" height="4" rx="1" stroke="#FCF7ED" stroke-width="1.6"/><rect x="4.5" y="9.5" width="7" height="4.5" rx="1" stroke="#FCF7ED" stroke-width="1.6"/></svg>生成小票图片';
+  }
 }
 
 // 自动打印开关（存 localStorage，默认开）
@@ -1222,6 +1257,7 @@ function boot() {
   fitPhone();
   initRouter();
   initPrinter();
+  album.initAlbum();
   initModal();
   initFocusTimer();
   initJournal();

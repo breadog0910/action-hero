@@ -39,7 +39,7 @@ html, body { height: 100%; }
 
 body {
   font-family: "Sarasa Gothic SC", "Inter", -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
-  background: var(--parchment-dark);
+  background: var(--parchment);
   color: var(--ink-brown);
   -webkit-text-size-adjust: 100%;
   overflow: hidden;
@@ -48,7 +48,7 @@ body {
 .hidden { display: none !important; }
 [hidden] { display: none !important; }
 
-/* ============ 手机画布：400×880，等比缩放 ============ */
+/* ============ 应用画布：400×880 设计稿，全屏贴合 ============ */
 .phone {
   position: absolute;
   width: 400px;
@@ -57,9 +57,7 @@ body {
   left: 50%;
   transform-origin: center center;
   background: var(--parchment);
-  border-radius: var(--r-xl);
   overflow: hidden;
-  box-shadow: 0 10px 40px rgba(71, 46, 26, 0.25);
 }
 
 /* ============ 屏幕舞台 ============ */
@@ -340,6 +338,17 @@ body {
 
 .print-actions { display: flex; gap: var(--sp-sm); }
 .print-actions .btn { flex: 1; }
+
+.print-tip {
+  background: rgba(199, 153, 51, 0.12);
+  border: 1.5px dashed var(--gold);
+  border-radius: var(--r-sm);
+  color: var(--ink-brown);
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 8px 10px;
+  margin-bottom: var(--sp-sm);
+}
 
 .ticket-card {
   background: var(--cream);
@@ -1008,3 +1017,114 @@ label {
 .secret-note textarea { margin-bottom: 0; }
 .secret-hint { font-size: 10px; color: var(--ink-gray); line-height: 1.7; text-align: center; }
 .secret-status { font-size: 11px; color: var(--gold-deep); font-weight: 600; text-align: center; min-height: 15px; }
+
+/* ============ 小票册 ============ */
+.album-entry {
+  width: 100%;
+  margin-bottom: var(--sp-sm);
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 12px;
+  font-family: inherit; font-size: 14px; font-weight: 700; color: var(--ink-brown);
+  background: linear-gradient(180deg, var(--cream) 0%, var(--cream-dark) 100%);
+  border: 1.5px dashed var(--gold);
+  border-radius: var(--r-lg);
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+.album-entry:active { transform: scale(0.97); }
+.album-entry-icon { font-size: 18px; }
+.album-count { font-size: 12px; color: var(--gold-deep); font-weight: 600; }
+
+.album-hint { text-align: center; font-size: 10px; color: var(--ink-gray); line-height: 1.6; margin-bottom: var(--sp-sm); }
+.album-stage { display: flex; justify-content: center; padding: 20px 0 12px; }
+
+.album-stack { position: relative; width: 232px; height: 330px; perspective: 600px; }
+
+.album-card {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  padding: 20px 16px 14px;
+  background: linear-gradient(180deg, var(--cream) 0%, #FAF3E2 100%);
+  border: 1.5px solid rgba(184, 140, 97, 0.55);
+  border-radius: 14px;
+  box-shadow: 0 8px 20px rgba(89, 56, 30, 0.16);
+  overflow: hidden;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+  will-change: transform;
+  transition: transform 0.38s cubic-bezier(0.22, 1.2, 0.36, 1);
+  transform-origin: 90% 90%;
+}
+.album-card.dragging { transition: none; cursor: grabbing; }
+.album-card::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 26px;
+  background: linear-gradient(transparent, #FAF3E2);
+  pointer-events: none;
+}
+.album-tape {
+  position: absolute; top: -9px; left: 50%;
+  width: 92px; height: 20px;
+  transform: translateX(-50%) rotate(-3deg);
+  background: rgba(230, 191, 89, 0.72);
+  border-radius: 2px;
+  box-shadow: 0 2px 4px rgba(89, 56, 30, 0.14);
+  z-index: 2;
+}
+.album-chip {
+  position: absolute; right: 10px; bottom: 8px; z-index: 2;
+  font-size: 9px; color: var(--gold-deep);
+  background: rgba(230, 191, 89, 0.18);
+  border: 1px solid rgba(199, 153, 51, 0.45);
+  border-radius: 20px;
+  padding: 2px 8px;
+}
+
+.album-receipt { flex: 1; display: flex; flex-direction: column; gap: 4px; overflow: hidden; }
+.r-line { font-size: 11px; color: var(--ink-brown); line-height: 1.5; }
+.r-bold { font-weight: 700; }
+.r-center { text-align: center; }
+.r-right { text-align: right; }
+.r-lg { font-size: 14px; }
+.r-md { font-size: 12px; }
+.r-sm { font-size: 10px; color: var(--ink-gray); }
+.r-div {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  margin: 5px 0;
+}
+.r-div::before, .r-div::after {
+  content: ''; flex: 1; height: 1px;
+  background: repeating-linear-gradient(90deg, var(--wood-light) 0 3px, transparent 3px 6px);
+}
+.r-div span { color: var(--gold-deep); font-size: 8px; letter-spacing: 2px; }
+
+/* 详情弹层 */
+.album-detail { display: flex; flex-direction: column; gap: 14px; align-items: center; }
+.album-d-head { display: flex; align-items: baseline; gap: 8px; }
+.album-d-title { font-size: 16px; font-weight: 700; color: var(--ink-brown); }
+.album-d-date { font-size: 11px; color: var(--ink-gray); }
+.album-receipt-lg {
+  width: 100%;
+  background: linear-gradient(180deg, var(--cream) 0%, #FAF3E2 100%);
+  border: 1.5px dashed var(--wood-light);
+  border-radius: var(--r-md);
+  padding: 18px 16px;
+  display: flex; flex-direction: column; gap: 5px;
+  max-height: 320px; overflow: auto;
+}
+.album-receipt-lg .r-line { font-size: 13px; }
+.album-receipt-lg .r-lg { font-size: 17px; }
+.album-receipt-lg .r-md { font-size: 14px; }
+.album-receipt-lg .r-sm { font-size: 11px; }
+.album-d-actions { display: flex; gap: 10px; width: 100%; }
+.album-d-actions .btn { flex: 1; }
+
+/* 空状态 */
+.album-empty {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 30px 0 20px; text-align: center;
+}
+.album-empty-emoji { font-size: 44px; }
+.album-empty-title { font-size: 14px; font-weight: 700; color: var(--ink-brown); }
+.album-empty-sub { font-size: 11px; color: var(--ink-gray); margin-bottom: 4px; }
