@@ -104,8 +104,15 @@ export function initAuth() {
   });
 
   // 监听会话变化（登录/退出）
+  // 重要：onAuthStateChange 的 session 来自本地缓存，可能已过期。
+  // 直接相信它，界面会误判“已登录”，但后续保存（createTask 等）用
+  // getUser() 严格校验时会失败，导致“能进页面却加不了任务”。
+  // 因此这里改用 getUser() 向服务端严格校验后再 emit。
   sb.auth.onAuthStateChange((event, session) => {
-    emit(session ? session.user : null);
+    if (!session) { emit(null); return; }
+    sb.auth.getUser()
+      .then(({ data, error }) => emit(error || !data.user ? null : data.user))
+      .catch(() => emit(null));
   });
 }
 

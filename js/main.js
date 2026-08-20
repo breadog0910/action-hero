@@ -10,7 +10,7 @@ import { getAIConfig, setAIConfig, hasAIKey } from './ai.js';
 import { celebrateLines, reviewLines, renderReceipt } from './receipt.js';
 import * as album from './album.js';
 import { drawAnswer, askOracle } from './oracle.js';
-import { talk as talkSprite } from './companion.js';
+import { spriteReply } from './companion.js';
 
 // ===== 画布全屏贴合：400 × 880 设计稿 =====
 // 主流全面屏手机（宽高比与设计稿 0.455 偏差 ≤4%）→ 覆盖填满整屏，裁剪 ≤2% 无感；
@@ -151,12 +151,18 @@ async function renderPlanView() {
   try { profile = await game.getProfile(); } catch (e) { profile = null; }
 
   sec.innerHTML = `
-    <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
+    <div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
       <span class="section-title" style="font-size:13px;">任务清单</span>
-      <span class="section-count">${profile ? `Lv.${profile.level} · 经验 ${profile.xp}` : ''}</span>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <span class="section-count">${profile ? `Lv.${profile.level} · 经验 ${profile.xp}` : ''}</span>
+        <button class="btn btn-secondary btn-small" id="printTasksBtn">🖨 打印清单</button>
+      </div>
     </div>
     <ul id="taskList" style="list-style:none;display:flex;flex-direction:column;gap:10px;"></ul>
   `;
+
+  // 一键打印待办清单
+  sec.querySelector('#printTasksBtn').addEventListener('click', () => printTaskList());
 
   const listEl = sec.querySelector('#taskList');
   let tasks = [];
@@ -167,16 +173,20 @@ async function renderPlanView() {
       ? '还没有任务记录'
       : '任务清单是空的，添加一个开始今天的冒险吧');
   } else {
-    listEl.innerHTML = tasks.map((t) => `
+    listEl.innerHTML = tasks.map((t) => {
+      const mult = t.type === 'boss' ? 2 : 1;
+      const xp = game.xpForDifficulty(t.difficulty) * mult;
+      const lt = game.lightForDifficulty(t.difficulty) * mult;
+      return `
       <li class="task-card">
         <span class="task-check"></span>
         <span class="task-info">
           <span class="task-title">${t.type === 'boss' ? '⚔ ' : ''}${escapeHtml(t.title)}</span>
-          <span class="task-meta">难度 ${t.difficulty} · +${game.xpForDifficulty(t.difficulty) * (t.type === 'boss' ? 2 : 1)} XP · +${game.lightForDifficulty(t.difficulty) * (t.type === 'boss' ? 2 : 1)} 光</span>
+          <span class="task-meta">难度 ${t.difficulty} · ${game.difficultyLabel(t.difficulty)} · +${xp} 积分 · +${lt} 光</span>
         </span>
         <button class="btn btn-accept" data-id="${t.id}">完成</button>
-      </li>
-    `).join('');
+      </li>`;
+    }).join('');
   }
 
   // 添加任务（内联表单，替代 prompt）
@@ -198,6 +208,7 @@ async function renderPlanView() {
           <option value="5">难度 5 · 史诗</option>
         </select>
       </div>
+      <div class="diff-preview" id="diffPreview"></div>
       <div class="task-form-actions">
         <button class="btn btn-secondary btn-small" id="cancelAddTask">取消</button>
         <button class="btn btn-primary btn-small" id="confirmAddTask">添加到清单</button>
@@ -207,6 +218,24 @@ async function renderPlanView() {
 
   const addBtn = addLi.querySelector('#addTaskBtn');
   const addForm = addLi.querySelector('#addTaskForm');
+  const titleInput = addLi.querySelector('#newTaskTitle');
+  const typeSel = addLi.querySelector('#newTaskType');
+  const diffSel = addLi.querySelector('#newTaskDiff');
+  const diffPreview = addLi.querySelector('#diffPreview');
+
+  // 系统自动判定难度：输入标题/切换类型时实时更新难度与预计积分预览
+  function updateDiffPreview() {
+    const d = game.estimateDifficulty(titleInput.value, typeSel.value);
+    diffSel.value = String(d);
+    const mult = typeSel.value === 'boss' ? 2 : 1;
+    const xp = game.xpForDifficulty(d) * mult;
+    const lt = game.lightForDifficulty(d) * mult;
+    diffPreview.innerHTML = `系统判定：<b>难度 ${d} · ${game.difficultyLabel(d)}</b> · 预计 +${xp} 积分 · +${lt} 光${typeSel.value === 'boss' ? '（Boss 翻倍）' : ''}`;
+  }
+  titleInput.addEventListener('input', updateDiffPreview);
+  typeSel.addEventListener('change', updateDiffPreview);
+  updateDiffPreview();
+
   addBtn.addEventListener('click', () => {
     if (isGuest() || !isConfigured()) {
       alert('游客模式下无法保存任务，请先配置 Supabase 并登录。');
@@ -214,24 +243,31 @@ async function renderPlanView() {
     }
     addBtn.hidden = true;
     addForm.hidden = false;
-    addLi.querySelector('#newTaskTitle').focus();
+    titleInput.focus();
   });
   addLi.querySelector('#cancelAddTask').addEventListener('click', () => {
     addForm.hidden = true;
     addBtn.hidden = false;
   });
   addLi.querySelector('#confirmAddTask').addEventListener('click', () => {
-    const title = addLi.querySelector('#newTaskTitle').value.trim();
-    if (!title) { addLi.querySelector('#newTaskTitle').focus(); return; }
-    const type = addLi.querySelector('#newTaskType').value;
-    const diff = Number(addLi.querySelector('#newTaskDiff').value);
+    const title = titleInput.value.trim();
+    if (!title) { titleInput.focus(); return; }
+    const type = typeSel.value;
+    const diff = Number(diffSel.value);
     const confirmBtn = addLi.querySelector('#confirmAddTask');
     confirmBtn.disabled = true;
     game.createTask(title, type, diff)
       .then(() => { renderPlanView(); renderHubStatus(); })
-      .catch((err) => { alert('新建任务失败：' + err.message); confirmBtn.disabled = false; });
+      .catch((err) => {
+        if (/登录|过期|会话|session|unauthorized|invalid|auth/i.test(err.message)) {
+          alert('登录已过期，正在返回登录页，请重新登录后再添加任务。');
+          signOut();
+        } else {
+          alert('新建任务失败：' + err.message);
+        }
+        confirmBtn.disabled = false;
+      });
   });
-
   // 完成任务：结算弹层
   listEl.querySelectorAll('button[data-id]').forEach((btn) => {
     btn.addEventListener('click', async () => {
@@ -261,6 +297,96 @@ async function renderPlanView() {
       }
     });
   });
+}
+
+// ===== 一键打印待办清单 =====
+function todayStr() {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+async function printTaskList() {
+  let tasks = [];
+  try { tasks = await game.listTasks(); } catch (e) { tasks = []; }
+  if (tasks.length === 0) { alert('当前没有待办任务可打印'); return; }
+
+  // 1) 小票册存档（与打印位图共用同一份 lines 数据）
+  const lines = [
+    { text: '📋 待办清单', size: 26, align: 'center', bold: true, space: 6 },
+    { divider: true },
+    { text: todayStr(), size: 16, align: 'center', space: 6 },
+    { divider: true },
+  ];
+  tasks.forEach((t, i) => {
+    const mult = t.type === 'boss' ? 2 : 1;
+    const xp = game.xpForDifficulty(t.difficulty) * mult;
+    const lt = game.lightForDifficulty(t.difficulty) * mult;
+    lines.push({ text: `${i + 1}. ${t.title}${t.type === 'boss' ? ' ⚔' : ''}`, size: 18, space: 2 });
+    lines.push({ text: `   难度${t.difficulty} · +${xp}积分 · +${lt}光`, size: 14, space: 4 });
+  });
+  lines.push({ divider: true });
+  lines.push({ text: `共 ${tasks.length} 项待办 · 行动勇者`, size: 16, align: 'center' });
+  try {
+    await album.saveTicket({ kind: 'tasklist', title: '待办清单', date: todayStr(), lines });
+    album.updateAlbumBadge();
+  } catch (e) { console.warn('小票存档失败（不影响打印）：', e); }
+
+  // 2) 蓝牙小票机直打（如已连接）
+  if (printer.isConnected()) {
+    try {
+      const text = lines.map((l) => l.text || '').join('\n');
+      await printer.printText(text);
+    } catch (perr) { console.error('蓝牙打印失败（不影响其他）：', perr); }
+  }
+
+  // 3) 浏览器打印 / 另存 PDF（最通用，任意设备可用）
+  printTaskChecklist(tasks);
+}
+
+function printTaskChecklist(tasks) {
+  const rows = tasks.map((t, i) => {
+    const mult = t.type === 'boss' ? 2 : 1;
+    const xp = game.xpForDifficulty(t.difficulty) * mult;
+    const lt = game.lightForDifficulty(t.difficulty) * mult;
+    return `<li>
+      <span class="chk"></span>
+      <span class="t-num">${i + 1}.</span>
+      <span class="t-title">${escapeHtml(t.title)}${t.type === 'boss' ? ' ⚔' : ''}</span>
+      <span class="t-meta">难度${t.difficulty} · +${xp}积分 · +${lt}光</span>
+    </li>`;
+  }).join('');
+
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>待办清单</title><style>
+    *{box-sizing:border-box;}
+    body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;color:#3a2a18;padding:36px 32px;margin:0;}
+    h1{font-size:22px;margin:0 0 4px;}
+    .sub{color:#8a7a66;font-size:13px;margin-bottom:20px;}
+    ul{list-style:none;padding:0;margin:0;}
+    li{display:flex;align-items:baseline;gap:10px;padding:11px 0;border-bottom:1px dashed #d8c8b0;}
+    .chk{display:inline-block;width:15px;height:15px;border:1.6px solid #855938;border-radius:3px;margin-right:2px;flex:0 0 auto;transform:translateY(2px);}
+    .t-num{color:#855938;font-weight:700;min-width:22px;}
+    .t-title{flex:1;font-size:15px;}
+    .t-meta{font-size:12px;color:#8a7a66;white-space:nowrap;}
+    .foot{margin-top:20px;font-size:12px;color:#a99a86;text-align:center;}
+    .bar{margin-top:14px;}
+    button{font-size:14px;padding:9px 16px;background:#6b4423;color:#fff;border:0;border-radius:8px;cursor:pointer;}
+    @media print{.bar{display:none;}}
+  </style></head><body>
+    <h1>📋 待办清单</h1>
+    <div class="sub">行动勇者 · ${todayStr()} · 共 ${tasks.length} 项</div>
+    <ul>${rows}</ul>
+    <div class="foot">—— 一件一件来，世界会慢慢变亮 ——</div>
+    <div class="bar"><button onclick="window.print()">🖨 打印 / 另存为 PDF</button></div>
+  </body></html>`;
+
+  const w = window.open('', '_blank');
+  if (!w) { alert('浏览器拦截了打印窗口，请允许弹窗后重试，或前往「打印工坊」查看小票册。'); return; }
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+  setTimeout(() => { try { w.print(); } catch (e) {} }, 350);
 }
 
 // 任务结算弹层内容
@@ -307,11 +433,14 @@ async function renderFocusView() {
   el.light.innerHTML = `+${light}<i>点</i>`;
 }
 
-// ===== 番茄钟状态机 =====
+// ===== 专注计时状态机（倒计时 / 正计时）=====
 let focus = {
-  total: 25 * 60,      // 选定时长（秒）
-  remaining: 25 * 60,  // 剩余（秒）
+  mode: 'countdown',    // 'countdown' 倒计时 | 'countup' 正计时
+  total: 25 * 60,       // 倒计时目标（秒）
+  remaining: 25 * 60,   // 倒计时剩余（秒）= total - elapsed
+  elapsed: 0,           // 累计专注秒数
   running: false,
+  recorded: false,      // 本段是否已记录，防止重复结算
   interval: null,
 };
 
@@ -319,6 +448,11 @@ function fmtTime(sec) {
   const m = String(Math.floor(sec / 60)).padStart(2, '0');
   const s = String(sec % 60).padStart(2, '0');
   return `${m}:${s}`;
+}
+
+// 计时器显示的数值：倒计时看剩余，正计时看已用
+function focusDisplaySeconds() {
+  return focus.mode === 'countdown' ? focus.remaining : focus.elapsed;
 }
 
 function focusRender() {
@@ -329,25 +463,39 @@ function focusRender() {
   const hint = document.getElementById('focusHint');
   const goal = document.getElementById('focusGoal');
   const presetRow = document.getElementById('focusPreset');
+  const customInput = document.getElementById('focusCustomMin');
+  const modeRow = document.getElementById('focusMode');
 
-  timer.textContent = fmtTime(focus.remaining);
-  timer.classList.toggle('done', focus.remaining === 0);
-  label.textContent = `${Math.round(focus.total / 60)} 分钟`;
-  startBtn.textContent = focus.remaining === 0 ? '再来一次' : (focus.running ? '暂停' : '开始专注');
-  resetBtn.hidden = !(focus.running || focus.remaining !== focus.total);
+  timer.textContent = fmtTime(focusDisplaySeconds());
+  timer.classList.toggle('done', focus.mode === 'countdown' && focus.remaining === 0);
 
-  presetRow.querySelectorAll('.preset-chip').forEach((c) => {
-    c.classList.toggle('active', Number(c.dataset.min) * 60 === focus.total);
-  });
+  if (modeRow) modeRow.querySelectorAll('.mode-chip').forEach((c) => c.classList.toggle('active', c.dataset.mode === focus.mode));
+  // 预设/自定义仅在倒计时模式可用
+  if (presetRow) presetRow.style.display = focus.mode === 'countdown' ? '' : 'none';
+  if (focus.mode === 'countdown') {
+    if (presetRow) presetRow.querySelectorAll('.preset-chip').forEach((c) => c.classList.toggle('active', Number(c.dataset.min) * 60 === focus.total));
+    if (customInput) customInput.value = Math.round(focus.total / 60);
+    label.textContent = `${Math.round(focus.total / 60)} 分钟倒计时`;
+  } else {
+    label.textContent = `正计时 · 已专注 ${Math.floor(focus.elapsed / 60)} 分 ${focus.elapsed % 60} 秒`;
+  }
+
+  startBtn.textContent = (focus.mode === 'countdown' && focus.remaining === 0)
+    ? '再来一次'
+    : (focus.running
+      ? '暂停'
+      : (focus.mode === 'countup' ? '开始计时' : '开始专注'));
+  resetBtn.hidden = !(focus.running || focus.elapsed > 0 || (focus.mode === 'countdown' && focus.remaining !== focus.total));
+  resetBtn.textContent = focus.mode === 'countup' ? '结束并记录' : '重置';
 
   if (focus.running) {
     hint.textContent = goal.value.trim() ? `正在专注：「${goal.value.trim()}」` : '正在专注… 世界为你点亮了一盏灯';
-  } else if (focus.remaining === 0) {
+  } else if (focus.mode === 'countdown' && focus.remaining === 0) {
     hint.textContent = '专注完成，世界更亮了一分 ✨';
-  } else if (focus.remaining !== focus.total) {
-    hint.textContent = '已暂停，休息一下也可以';
+  } else if (focus.elapsed > 0) {
+    hint.textContent = focus.recorded ? '已记录这段专注 ✅' : '已暂停，休息一下也可以';
   } else {
-    hint.textContent = '';
+    hint.textContent = focus.mode === 'countup' ? '点开始计时，专注多久都行（满 1 分钟才记录）' : '';
   }
 }
 
@@ -360,35 +508,56 @@ function focusSetPreset(minutes) {
   stopTimer();
   focus.total = minutes * 60;
   focus.remaining = focus.total;
+  focus.elapsed = 0;
+  focus.recorded = false;
   focusRender();
 }
 
 function focusTick() {
-  focus.remaining -= 1;
-  if (focus.remaining <= 0) {
-    focus.remaining = 0;
-    stopTimer();
-    focusRender();
-    onFocusDone();
-    return;
+  focus.elapsed += 1;
+  if (focus.mode === 'countdown') {
+    focus.remaining = focus.total - focus.elapsed;
+    if (focus.remaining <= 0) {
+      focus.remaining = 0;
+      stopTimer();
+      focusRender();
+      endFocusSession('done');
+      return;
+    }
   }
   focusRender();
 }
 
-// 专注结束：游客提示 / 登录后写入真实数据
-async function onFocusDone() {
-  const minutes = Math.round(focus.total / 60);
-  const goal = document.getElementById('focusGoal').value.trim();
+// 结束一段专注：满 1 分钟才记录到世界；不足则温柔提示不记录
+async function endFocusSession(reason) {
+  if (focus.recorded) return;
+  focus.recorded = true;
+  const goal = (document.getElementById('focusGoal') || {}).value?.trim() || '';
 
+  if (focus.elapsed < 60) {
+    openModal(`
+      <div class="reward-card">
+        <span style="font-size:40px;line-height:1;">⏱️</span>
+        <div class="reward-title">专注了 ${focus.elapsed} 秒</div>
+        <div class="reward-sub">满 1 分钟才会记录到世界哦，<br>再坚持一下下～</div>
+        <button class="btn btn-primary btn-block" id="rewardOkBtn">好的</button>
+      </div>`);
+    const ok = document.getElementById('rewardOkBtn');
+    if (ok) ok.addEventListener('click', closeModal);
+    return;
+  }
+
+  const minutes = Math.floor(focus.elapsed / 60);
   if (isGuest() || !isConfigured()) {
     openModal(`
       <div class="reward-card">
         <span style="font-size:40px;line-height:1;">⏳</span>
         <div class="reward-title">专注完成！</div>
-        <div class="reward-sub">完成了 ${minutes} 分钟专注时光。<br>游客模式下无法保存记录，登录后会自动写入世界。</div>
+        <div class="reward-sub">专注了 ${minutes} 分钟。<br>游客模式下无法保存记录，登录后会自动写入世界。</div>
         <button class="btn btn-primary btn-block" id="rewardOkBtn">好的</button>
       </div>`);
-    document.getElementById('rewardOkBtn').addEventListener('click', closeModal);
+    const ok = document.getElementById('rewardOkBtn');
+    if (ok) ok.addEventListener('click', closeModal);
     return;
   }
 
@@ -400,7 +569,8 @@ async function onFocusDone() {
       isBoss: false,
       drop: null,
     }));
-    document.getElementById('rewardOkBtn').addEventListener('click', () => { closeModal(); renderFocusView(); renderHubStatus(); });
+    const ok = document.getElementById('rewardOkBtn');
+    if (ok) ok.addEventListener('click', () => { closeModal(); renderFocusView(); renderHubStatus(); });
   } catch (err) {
     alert('记录专注失败：' + err.message);
   }
@@ -410,17 +580,41 @@ function initFocusTimer() {
   const startBtn = document.getElementById('focusStartBtn');
   const resetBtn = document.getElementById('focusResetBtn');
   const presetRow = document.getElementById('focusPreset');
+  const customInput = document.getElementById('focusCustomMin');
   const goal = document.getElementById('focusGoal');
+  const modeRow = document.getElementById('focusMode');
 
-  presetRow.querySelectorAll('.preset-chip').forEach((chip) => {
-    chip.addEventListener('click', () => {
-      if (focus.running) stopTimer();
-      focusSetPreset(Number(chip.dataset.min));
+  if (presetRow) {
+    presetRow.querySelectorAll('.preset-chip').forEach((chip) => {
+      chip.addEventListener('click', () => { if (focus.running) stopTimer(); focusSetPreset(Number(chip.dataset.min)); });
     });
-  });
+  }
+  if (customInput) {
+    customInput.addEventListener('change', () => {
+      let m = parseInt(customInput.value, 10);
+      if (isNaN(m) || m < 1) { m = 1; customInput.value = 1; }
+      if (m > 600) { m = 600; customInput.value = 600; }
+      if (focus.running) stopTimer();
+      focusSetPreset(m);
+    });
+  }
+  if (modeRow) {
+    modeRow.querySelectorAll('.mode-chip').forEach((chip) => {
+      chip.addEventListener('click', () => {
+        if (chip.dataset.mode === focus.mode) return;
+        if (focus.running) stopTimer();
+        if (focus.elapsed > 0) endFocusSession('switch'); // 切换前先结算已专注时长（若≥1分钟）
+        focus.mode = chip.dataset.mode;
+        focus.elapsed = 0;
+        focus.remaining = focus.total;
+        focus.recorded = false;
+        focusRender();
+      });
+    });
+  }
 
   startBtn.addEventListener('click', () => {
-    if (focus.remaining === 0) {          // 再来一次
+    if (focus.mode === 'countdown' && focus.remaining === 0) {  // 再来一次
       focusSetPreset(Math.round(focus.total / 60));
       return;
     }
@@ -434,8 +628,13 @@ function initFocusTimer() {
     focusRender();
   });
 
-  resetBtn.addEventListener('click', () => {
-    focusSetPreset(Math.round(focus.total / 60));
+  resetBtn.addEventListener('click', async () => {
+    if (focus.running) stopTimer();
+    if (focus.elapsed > 0) await endFocusSession(focus.mode === 'countup' ? 'end' : 'manual');
+    focus.elapsed = 0;
+    focus.remaining = focus.total;
+    focus.recorded = false;
+    focusRender();
   });
 
   goal.addEventListener('input', () => {
@@ -663,165 +862,13 @@ function initOracle() {
 
 
 // ===== 神奇精灵：实时对话 / 秘密日记（异步回信） =====
-// 说明：UI 入口已迁移到「回忆小屋 · 精灵密信」书内的"找精灵聊聊"按钮。
-// 这里只保留会话逻辑与写回编年史的流程，不再依赖外部 entry-* 按钮。
-let spriteMode = 'chat';   // chat | secret
-
-function initSpriteChat() { /* 由 openSpritePanel 触发，不再需要初始绑定 */ }
-
-function openSpritePanel() {
-  const online = !isGuest() && isConfigured();
-  openModal(`
-    <div class="sprite-head">
-      <span class="sprite-avatar">🧚</span>
-      <div>
-        <div class="sprite-title">神奇精灵</div>
-        <div class="sprite-sub">住在回忆小屋里的伙伴 · ${online ? '会读你的秘密，也会陪你聊天' : '登录后它才会醒来'}</div>
-      </div>
-    </div>
-    <div class="tab-row">
-      <button class="tab-chip active" id="tabChat">实时对话</button>
-      <button class="tab-chip" id="tabSecret">秘密日记</button>
-    </div>
-    <div id="spriteBody"></div>
-  `);
-  document.getElementById('tabChat').addEventListener('click', () => { spriteMode = 'chat'; renderSpritePanel(); });
-  document.getElementById('tabSecret').addEventListener('click', () => { spriteMode = 'secret'; renderSpritePanel(); });
-  renderSpritePanel();
-}
-
-function renderSpritePanel() {
-  const body = document.getElementById('spriteBody');
-  if (spriteMode === 'chat') {
-    body.innerHTML = `
-      <div class="chat-box" id="chatBox"></div>
-      <div class="chat-input-row">
-        <input id="chatInput" type="text" placeholder="想和精灵说点什么…" maxlength="100">
-        <button class="btn btn-primary" id="chatSendBtn">发送</button>
-      </div>`;
-    bindChatBox();
-  } else {
-    body.innerHTML = `
-      <div class="secret-note">
-        <textarea id="secretText" rows="3" maxlength="300" placeholder="把不敢说出口的话，悄悄写给精灵…"></textarea>
-        <button class="btn btn-primary btn-block" id="secretSendBtn">封存这封信</button>
-        <p class="secret-hint">精灵会在 <b>一段时间后</b> 回复你——下次打开小屋时，读一读它的回信吧。</p>
-        <p class="secret-status" id="secretStatus"></p>
-      </div>`;
-    bindSecretBox();
-  }
-}
-
-function bubbleEl(role, text) {
-  const div = document.createElement('div');
-  div.className = `chat-bubble ${role}`;
-  div.textContent = text;
-  return div;
-}
-
-function bindChatBox() {
-  const box = document.getElementById('chatBox');
-  const input = document.getElementById('chatInput');
-  const sendBtn = document.getElementById('chatSendBtn');
-
-  const history = JSON.parse(localStorage.getItem('sprite_chat') || '[]');
-  history.forEach((m) => box.appendChild(bubbleEl(m.role, m.text)));
-  box.scrollTop = box.scrollHeight;
-
-  async function send() {
-    const text = input.value.trim();
-    if (!text) return;
-    if (isGuest() || !isConfigured()) {
-      alert('游客模式下精灵还不能回应，登录后它就会醒来。');
-      return;
-    }
-    input.value = '';
-    box.appendChild(bubbleEl('user', text));
-    history.push({ role: 'user', text });
-    localStorage.setItem('sprite_chat', JSON.stringify(history.slice(-30)));
-    box.appendChild(bubbleEl('system', '精灵正在思考…'));
-    box.scrollTop = box.scrollHeight;
-    sendBtn.disabled = true;
-    try {
-      const reply = await talkSprite(text);
-      const thinking = box.querySelector('.chat-bubble.system');
-      if (thinking) thinking.remove();
-      box.appendChild(bubbleEl('sprite', reply));
-      history.push({ role: 'sprite', text: reply });
-      localStorage.setItem('sprite_chat', JSON.stringify(history.slice(-30)));
-    } catch (err) {
-      const thinking = box.querySelector('.chat-bubble.system');
-      if (thinking) thinking.remove();
-      box.appendChild(bubbleEl('system', err.message || '精灵打了个盹，稍后再试。'));
-    } finally {
-      sendBtn.disabled = false;
-      box.scrollTop = box.scrollHeight;
-    }
-  }
-  sendBtn.addEventListener('click', send);
-  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
-}
-
-function bindSecretBox() {
-  const text = document.getElementById('secretText');
-  const sendBtn = document.getElementById('secretSendBtn');
-  const status = document.getElementById('secretStatus');
-
-  // 打开面板时：若有待回信的秘密，先让精灵回信
-  const pending = JSON.parse(localStorage.getItem('sprite_secret_pending') || 'null');
-  if (pending) {
-    deliverSecretReply(pending, status);
-    localStorage.removeItem('sprite_secret_pending');
-  }
-
-  sendBtn.addEventListener('click', async () => {
-    const content = text.value.trim();
-    if (!content) { text.focus(); return; }
-    if (isGuest() || !isConfigured()) {
-      alert('游客模式下无法封存秘密，请先登录。');
-      return;
-    }
-    sendBtn.disabled = true;
-    try {
-      await chronicle.addEntry('secret', `写给精灵的秘密：${content}`);
-      localStorage.setItem('sprite_secret_pending', JSON.stringify({ text: content, at: Date.now() }));
-      text.value = '';
-      status.textContent = '信已封存，精灵会在一段时间后回复你。';
-      // 演示友好：约 9 秒后模拟“一段时间”，精灵来信
-      setTimeout(() => {
-        const stored = JSON.parse(localStorage.getItem('sprite_secret_pending') || 'null');
-        if (stored && document.getElementById('spriteBody')) {
-          deliverSecretReply(stored, status);
-          localStorage.removeItem('sprite_secret_pending');
-        }
-      }, 9000);
-    } catch (err) {
-      alert('封存失败：' + err.message);
-    } finally {
-      sendBtn.disabled = false;
-    }
-  });
-}
-
-// 生成精灵回信（AI 或固定模板，回信自动写进编年史 → 精灵密信）
-async function deliverSecretReply(pending, statusEl) {
-  try {
-    const reply = await talkSprite(`（秘密日记）${pending.text}`);
-    if (statusEl) statusEl.textContent = `精灵回复了你：「${reply}」`;
-    // 把回信归档到「精灵密信」书
-    try {
-      await chronicle.addEntry('conversation', `精灵的回复：${reply}`);
-    } catch (_) { /* 不阻塞主流程 */ }
-  } catch (e) {
-    if (statusEl) statusEl.textContent = '精灵还在读你的信，稍后再来看看。';
-  }
-}
+// 精灵对话已迁移为书架上的「精灵密信」书（见 openSpriteBook / renderDiaryView 的 isSprite 分支）。
 
 // ===== 回忆小屋：主视图（成长日记）+ 书架 + 翻书 + 里程碑 =====
 // 数据模型：主视图展示「我的日记」默认书的最新一篇（富排版）；书架每本书（books 表）→ 点开 → 一页页翻（chronicle.book_id）
 const MEM_TYPE_NAMES = { journal: '日记', review: '复盘', conversation: '精灵对话', action: '行动', oracle: '求签', secret: '密信' };
 const MEM_SPRITE_BOOK_TITLE = '精灵密信';
-const MEM_MEMORY_VIEWS = ['memoryHomeView', 'memoryShelfView', 'memoryBookView', 'memoryMilestoneView'];
+const MEM_MEMORY_VIEWS = ['memoryHomeView', 'memoryShelfView'];
 const DIARY_WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 
 let memState = {
@@ -830,13 +877,34 @@ let memState = {
   spread: 0,             // 当前展开：0 表示"打开即见 entry[0]"（左封面 + 右 entry[0]）
   writeType: 'journal',  // 新页类型
   from: 'shelf',         // 打开书的来路：home | shelf（关闭书时回去）
+  isSprite: false,       // 当前书是否为「精灵密信」
+  editingId: null,       // 正在修改的条目 id（null = 新建）
 };
+
+// 精灵延时回信的定时器（离开精灵书时清空）
+let spriteTimers = [];
 
 let diaryState = {
   cat: '',               // 当前分类筛选（'' = 全部）
   list: [],              // 筛选后的条目
   idx: 0,                // 当前展示第几篇
 };
+
+// 把 ISO 时间格式化为「2026-08-20 21:57」
+function fmtDateTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return String(iso);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+// 精灵回信的随机延时：1 分钟 ~ 5 小时
+function randomReplyDelayMs() {
+  const min = 60 * 1000;
+  const max = 5 * 60 * 60 * 1000;
+  return Math.floor(min + Math.random() * (max - min));
+}
 
 function switchMemoryView(id) {
   MEM_MEMORY_VIEWS.forEach((v) => {
@@ -846,12 +914,12 @@ function switchMemoryView(id) {
 }
 
 async function renderMemoryView() {
-  // 每次进入回忆小屋：显示主视图（成长日记）
-  showMemoryHome();
+  // 每次进入回忆小屋：默认显示书架
+  showShelf();
 }
 
-// ---------- 主视图：成长日记 ----------
-async function showMemoryHome() {
+// ---------- 主视图：成长日记 / 精灵密信 ----------
+async function renderDiaryView() {
   switchMemoryView('memoryHomeView');
 
   const pageEl = document.getElementById('diaryPage');
@@ -866,21 +934,51 @@ async function showMemoryHome() {
     return;
   }
 
-  try {
-    memState.book = await chronicle.ensureDefaultBook();
-    memState.entries = await chronicle.getBookEntries(memState.book.id);
-  } catch (e) {
-    countEl.textContent = '';
-    pageEl.innerHTML = offlineHint('打开日记失败，请稍后再试');
-    return;
+  // 没有当前书则兜底用默认书
+  if (!memState.book || !memState.entries) {
+    try {
+      memState.book = await chronicle.ensureDefaultBook();
+      memState.entries = await chronicle.getBookEntries(memState.book.id);
+    } catch (e) {
+      countEl.textContent = '';
+      pageEl.innerHTML = offlineHint('打开日记失败，请稍后再试');
+      return;
+    }
   }
 
-  // 重置分类 tab 到「全部」
-  diaryState.cat = '';
-  document.querySelectorAll('#diaryTabs .diary-tab').forEach((b) => {
-    b.classList.toggle('active', !b.dataset.cat);
-  });
-  applyDiaryFilter();
+  const isSprite = memState.isSprite;
+
+  // 精灵密信：先让到点的回信“寄到”，再重新拉取并安排后续回信定时器
+  if (isSprite) {
+    await revealPendingReplies(memState.book.id);
+    memState.entries = await chronicle.getBookEntries(memState.book.id);
+    scheduleSpriteReveals();
+  }
+
+  // 标题、删除按钮
+  document.getElementById('memoryBookTitle').textContent = memState.book.title || '我的日记';
+  document.getElementById('deleteBookBtn').style.display = (memState.book.title === '我的日记') ? 'none' : '';
+
+  // 精灵书不显示分类筛选；写作按钮改为“给精灵写封信”
+  document.getElementById('diaryTabs').style.display = isSprite ? 'none' : '';
+  const writeBtn = document.getElementById('diaryWriteBtn');
+  writeBtn.style.display = '';
+  writeBtn.innerHTML = isSprite
+    ? '✉ 给精灵写封信'
+    : '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 12C2 12 2.8 10.3 3.2 9.9L9.9 3.2L10.8 4.1L4.1 10.8C3.7 11.2 2 12 2 12Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg> 写下今天的故事';
+  document.getElementById('bookWriteType').textContent = (isSprite ? '密信 · ' : '日记 · ') + (memState.book.title || '');
+
+  // 列表准备：普通日记按分类筛选；精灵书直接用全部条目（来信 + 回信）
+  if (!isSprite) {
+    diaryState.cat = '';
+    document.querySelectorAll('#diaryTabs .diary-tab').forEach((b) => {
+      b.classList.toggle('active', !b.dataset.cat);
+    });
+    applyDiaryFilter();
+  } else {
+    diaryState.cat = '';
+    diaryState.list = memState.entries;
+  }
   // 默认展示最新一篇
   diaryState.idx = Math.max(0, diaryState.list.length - 1);
   renderDiaryPage();
@@ -912,30 +1010,69 @@ function renderDiaryPage() {
   document.getElementById('diaryNext').disabled = diaryState.idx >= total - 1;
 
   if (total === 0) {
-    pageEl.innerHTML = diaryState.cat
-      ? `<div class="diary-empty">「${escapeHtml(diaryState.cat)}」分类下还没有日记</div>`
-      : `<div class="diary-empty">日记还是空白的<br><span>写下第一篇，开始你的故事</span></div>`;
+    pageEl.innerHTML = memState.isSprite
+      ? `<div class="diary-empty">还没有写给精灵的信<br><span>点下方「给精灵写封信」，和它说说话吧</span></div>`
+      : (diaryState.cat
+        ? `<div class="diary-empty">「${escapeHtml(diaryState.cat)}」分类下还没有日记</div>`
+        : `<div class="diary-empty">日记还是空白的<br><span>写下第一篇，开始你的故事</span></div>`);
     return;
   }
 
   const e = diaryState.list[diaryState.idx];
-  const cat = (e.meta && e.meta.category) || '';
-  const mood = (e.meta && e.meta.mood) || '';
-  const typeName = MEM_TYPE_NAMES[e.type] || '记录';
-  pageEl.innerHTML = `
-    <div class="diary-page-head">
-      <span class="diary-page-date">${escapeHtml(diaryDateTitle(e.date))}</span>
-      <span class="diary-page-type">${escapeHtml(typeName)}</span>
-    </div>
-    <div class="diary-page-divider"><i></i><b></b><i></i></div>
-    ${(cat || mood) ? `
-    <div class="diary-page-meta">
-      ${cat ? `<span class="diary-tag">${escapeHtml(cat)}</span>` : ''}
-      ${mood ? `<span class="mood-chip active">${escapeHtml(mood)}</span>` : ''}
-    </div>` : ''}
-    <div class="diary-page-text">${escapeHtml((e.content || '').slice(0, 500))}</div>
-    <div class="diary-page-divider diary-page-divider-end"><i></i><b></b><i></i></div>
-  `;
+  const meta = e.meta || {};
+  const cat = meta.category || '';
+  const mood = meta.mood || '';
+  const writeTime = fmtDateTime(meta.written_at || e.created_at);
+  const editTime = meta.edited_at ? fmtDateTime(meta.edited_at) : '';
+
+  if (memState.isSprite) {
+    const isReply = (meta.role || 'user') === 'sprite';
+    const pending = meta.pending && meta.reply_at && new Date(meta.reply_at).getTime() > Date.now();
+    let statusLine = isReply ? `精灵于 ${writeTime} 回复` : `写于 ${writeTime}`;
+    if (!isReply && meta.pending && meta.reply_at) {
+      if (pending) statusLine += ` · 精灵正在读信，预计 ${fmtDateTime(meta.reply_at)} 回复`;
+    }
+    pageEl.innerHTML = `
+      <div class="diary-page-head">
+        <span class="diary-page-date">${isReply ? '精灵的回信' : '你写给精灵的信'}</span>
+        <span class="diary-page-type">${isReply ? '回信' : '来信'}</span>
+      </div>
+      <div class="diary-page-divider"><i></i><b></b><i></i></div>
+      <div class="diary-page-text">${escapeHtml((e.content || '').slice(0, 800))}</div>
+      <div class="diary-page-divider diary-page-divider-end"><i></i><b></b><i></i></div>
+      <div class="diary-page-time">${escapeHtml(statusLine)}</div>
+      <div class="diary-page-actions">
+        <button class="diary-act diary-act-danger" id="diaryDeleteBtn">删除</button>
+      </div>
+    `;
+  } else {
+    const typeName = MEM_TYPE_NAMES[e.type] || '记录';
+    pageEl.innerHTML = `
+      <div class="diary-page-head">
+        <span class="diary-page-date">${escapeHtml(diaryDateTitle(e.date))}</span>
+        <span class="diary-page-type">${escapeHtml(typeName)}</span>
+      </div>
+      <div class="diary-page-divider"><i></i><b></b><i></i></div>
+      ${(cat || mood) ? `
+      <div class="diary-page-meta">
+        ${cat ? `<span class="diary-tag">${escapeHtml(cat)}</span>` : ''}
+        ${mood ? `<span class="mood-chip active">${escapeHtml(mood)}</span>` : ''}
+      </div>` : ''}
+      <div class="diary-page-text">${escapeHtml((e.content || '').slice(0, 500))}</div>
+      <div class="diary-page-divider diary-page-divider-end"><i></i><b></b><i></i></div>
+      <div class="diary-page-time">写于 ${escapeHtml(writeTime)}${editTime ? ` · 修改于 ${escapeHtml(editTime)}` : ''}</div>
+      <div class="diary-page-actions">
+        <button class="diary-act" id="diaryEditBtn">修改</button>
+        <button class="diary-act diary-act-danger" id="diaryDeleteBtn">删除</button>
+      </div>
+    `;
+  }
+
+  // 绑定本页操作按钮（每次重渲染后重新绑定）
+  const delBtn = document.getElementById('diaryDeleteBtn');
+  if (delBtn) delBtn.addEventListener('click', () => deleteCurrentDiary());
+  const editBtn = document.getElementById('diaryEditBtn');
+  if (editBtn) editBtn.addEventListener('click', () => editCurrentDiary());
 }
 
 function turnDiary(dir) {
@@ -967,63 +1104,14 @@ async function writeNewDiary() {
   }
 }
 
-// ---------- 成长里程碑 ----------
-async function showMilestones() {
-  switchMemoryView('memoryMilestoneView');
-  const listEl = document.getElementById('milestoneList');
-  const countEl = document.getElementById('milestoneCount');
-
-  const online = !isGuest() && isConfigured();
-  if (!online) {
-    countEl.textContent = '';
-    listEl.innerHTML = offlineHint('登录后，这里会点亮你的成长足迹');
+// 在已打开的书里写新页（若有当前书则直接写，否则打开默认书）
+async function startWrite() {
+  if (isGuest() || !isConfigured()) {
+    alert('登录后才能写日记。');
     return;
   }
-
-  const stats = await fetchStats();
-
-  // 额外统计：总行动数 / 累计专注次数
-  let actionTotal = 0, focusTotal = 0;
-  try {
-    const sb = getClient();
-    const [{ count: a }, { count: f }] = await Promise.all([
-      sb.from('actions').select('id', { count: 'exact', head: true }),
-      sb.from('chronicle').select('id', { count: 'exact', head: true }).filter('meta->>focus', 'eq', 'true'),
-    ]);
-    actionTotal = a || 0;
-    focusTotal = f || 0;
-  } catch (e) { /* 保留占位 */ }
-
-  const streak = stats.streak;
-  const collected = stats.collected.length;
-  const light = stats.world ? (stats.world.light ?? 0) : 0;
-  const day = stats.world ? (stats.world.day_count ?? 1) : 1;
-
-  const miles = [
-    { name: '踏上旅程', desc: '完成第一次行动，迈出第一步', cur: actionTotal, goal: 1, unit: '次' },
-    { name: '七日之约', desc: '连续 7 天完成行动', cur: streak, goal: 7, unit: '天' },
-    { name: '静心时刻', desc: '累计 3 次专注时光', cur: focusTotal, goal: 3, unit: '次' },
-    { name: '小小收藏家', desc: '收集 15 件藏品', cur: collected, goal: 15, unit: '件' },
-    { name: '世界之光', desc: '让世界之光达到 100 点', cur: light, goal: 100, unit: '点' },
-    { name: '远行者', desc: '在世界中度过第 7 天', cur: day, goal: 7, unit: '天' },
-  ];
-
-  const earned = miles.filter((m) => m.cur >= m.goal).length;
-  countEl.textContent = `已点亮 ${earned} / ${miles.length}`;
-  listEl.innerHTML = miles.map((m) => {
-    const done = m.cur >= m.goal;
-    const pct = Math.min(100, Math.round((m.cur / m.goal) * 100));
-    return `
-      <div class="milestone-card ${done ? 'earned' : ''}">
-        <span class="milestone-dot">${done ? '✓' : ''}</span>
-        <span class="milestone-info">
-          <span class="milestone-name">${escapeHtml(m.name)}</span>
-          <span class="milestone-desc">${escapeHtml(m.desc)}</span>
-        </span>
-        <span class="milestone-badge">${done ? '已点亮' : `${m.cur} / ${m.goal} ${m.unit}`}</span>
-        <div class="bar bar-track milestone-progress"><div class="bar-fill ${done ? 'fill-gold' : 'fill-blue'}" style="width:${pct}%"></div></div>
-      </div>`;
-  }).join('');
+  if (!memState.book) { await writeNewDiary(); return; }
+  openWriteForm();
 }
 
 // ---------- 书架 ----------
@@ -1078,6 +1166,110 @@ async function showShelf() {
   });
 }
 
+// ---------- 找精灵聊聊：作为书架上一本「精灵密信」 ----------
+async function openSpriteBook() {
+  if (isGuest() || !isConfigured()) {
+    alert('登录后才能和精灵聊天。');
+    return;
+  }
+  try {
+    const book = await chronicle.getOrCreateBookByTitle('精灵密信', {
+      cover_color: '#3E6E8A',
+      description: '写给精灵的悄悄话与回信',
+    });
+    memState.from = 'shelf';
+    await openBook(book.id);
+  } catch (e) {
+    alert('打开精灵密信失败：' + e.message);
+  }
+}
+
+// 把到点的回信“寄到”：对每封待回信且已到点的来信，生成回信条目并清除 pending
+async function revealPendingReplies(bookId) {
+  const entries = await chronicle.getBookEntries(bookId);
+  const now = Date.now();
+  for (const letter of entries) {
+    const m = letter.meta || {};
+    if (m.pending && m.pending_reply && m.reply_at && new Date(m.reply_at).getTime() <= now) {
+      try {
+        await chronicle.addEntry('secret', m.pending_reply, {
+          role: 'sprite',
+          written_at: m.reply_at,
+          in_reply_to: letter.id,
+        }, bookId);
+        const newMeta = { ...m, pending: false };
+        delete newMeta.pending_reply;
+        await chronicle.updateEntry(letter.id, { meta: newMeta });
+      } catch (e) { /* 忽略单条失败，继续 */ }
+    }
+  }
+}
+
+// 为当前精灵书里尚未到点的来信安排“寄到”定时器
+function scheduleSpriteReveals() {
+  spriteTimers.forEach((t) => clearTimeout(t));
+  spriteTimers = [];
+  if (!memState.isSprite || !memState.book) return;
+  const now = Date.now();
+  for (const letter of memState.entries) {
+    const m = letter.meta || {};
+    if (m.pending && m.reply_at) {
+      const delay = Math.max(1000, new Date(m.reply_at).getTime() - now);
+      const t = setTimeout(async () => {
+        if (!memState.isSprite || !memState.book) return;
+        await revealPendingReplies(memState.book.id);
+        memState.entries = await chronicle.getBookEntries(memState.book.id);
+        diaryState.list = memState.entries;
+        renderDiaryPage();
+      }, delay);
+      spriteTimers.push(t);
+    }
+  }
+}
+
+// 发送一封写给精灵的信（精灵稍后延时回信）
+async function sendSpriteLetter(content) {
+  const now = new Date();
+  const replyAt = new Date(now.getTime() + randomReplyDelayMs());
+  const reply = await spriteReply(`（写给精灵的信）${content}`);
+  await chronicle.addEntry('secret', content, {
+    role: 'user',
+    written_at: now.toISOString(),
+    reply_at: replyAt.toISOString(),
+    pending: true,
+    pending_reply: reply,
+  }, memState.book.id);
+}
+
+// ---------- 日记：修改 / 删除 ----------
+function editCurrentDiary() {
+  const e = diaryState.list[diaryState.idx];
+  if (!e) return;
+  openWriteForm(e);
+}
+
+async function deleteCurrentDiary() {
+  const e = diaryState.list[diaryState.idx];
+  if (!e) return;
+  const label = memState.isSprite ? '这封与精灵的对话' : '这一篇日记';
+  if (!confirm(`确定删除${label}吗？此操作不可撤销。`)) return;
+  try {
+    await chronicle.deleteEntry(e.id);
+    memState.entries = await chronicle.getBookEntries(memState.book.id);
+    if (!memState.isSprite) {
+      diaryState.cat = '';
+      document.querySelectorAll('#diaryTabs .diary-tab').forEach((b) => b.classList.toggle('active', !b.dataset.cat));
+      applyDiaryFilter();
+    } else {
+      diaryState.list = memState.entries;
+    }
+    diaryState.idx = Math.min(diaryState.idx, Math.max(0, diaryState.list.length - 1));
+    renderDiaryPage();
+  } catch (err) {
+    alert('删除失败：' + err.message);
+  }
+}
+
 // ---------- 打开书 ----------
 async function openBook(bookId) {
   if (isGuest() || !isConfigured()) {
@@ -1091,53 +1283,30 @@ async function openBook(bookId) {
 
     memState.book = book;
     memState.entries = await chronicle.getBookEntries(bookId);
-    // 默认打开到最后一页（最新一页）；空书时 spread = 0
-    memState.spread = memState.entries.length > 0 ? memState.entries.length - 1 : 0;
     memState.writeType = (book.title === MEM_SPRITE_BOOK_TITLE) ? 'secret' : 'journal';
-
-    document.getElementById('bookTitleHeader').textContent = book.title || '未命名';
-    document.getElementById('bookDesc').textContent = book.description || '· 翻开 · 写下一页 · 留下一段回忆 ·';
-    document.getElementById('deleteBookBtn').style.display = (book.title === '我的日记') ? 'none' : '';
-
-    // 精灵密信书：底部增加"找精灵聊聊"按钮 + 改写新页按钮文案
-    const writeBtn = document.getElementById('writePageBtn');
-    const writeLabel = document.getElementById('writePageLabel');
-    let spriteBtn = document.getElementById('spriteChatBtn');
-    if (book.title === MEM_SPRITE_BOOK_TITLE) {
-      if (!spriteBtn) {
-        spriteBtn = document.createElement('button');
-        spriteBtn.id = 'spriteChatBtn';
-        spriteBtn.className = 'btn btn-secondary btn-small';
-        spriteBtn.style.marginRight = '6px';
-        spriteBtn.textContent = '找精灵聊聊';
-        writeBtn.parentNode.insertBefore(spriteBtn, writeBtn);
-        spriteBtn.addEventListener('click', openSpritePanel);
-      }
-      writeLabel.textContent = '写封密信';
-    } else {
-      if (spriteBtn) spriteBtn.remove();
-      writeLabel.textContent = '写新页';
-    }
+    memState.isSprite = (book.title === MEM_SPRITE_BOOK_TITLE);
+    memState.editingId = null;
 
     document.getElementById('bookWrite').hidden = true;
     document.getElementById('bookWriteText').value = '';
     document.getElementById('bookWriteCount').textContent = '0 / 500';
-    switchMemoryView('memoryBookView');
 
-    renderSpread();
+    await renderDiaryView();
   } catch (e) {
     alert('打开书失败：' + e.message);
   }
 }
 
 function closeBook() {
+  spriteTimers.forEach((t) => clearTimeout(t));
+  spriteTimers = [];
   memState.book = null;
   memState.entries = [];
   memState.spread = 0;
+  memState.isSprite = false;
+  memState.editingId = null;
   document.getElementById('bookWrite').hidden = true;
-  // 回到打开书时的来路
-  if (memState.from === 'home') showMemoryHome();
-  else showShelf();
+  showShelf();
 }
 
 async function deleteCurrentBook() {
@@ -1153,71 +1322,6 @@ async function deleteCurrentBook() {
   } catch (e) {
     alert('删除失败：' + e.message);
   }
-}
-
-// ---------- 渲染当前铺面 ----------
-function renderSpread() {
-  if (!memState.book) return;
-  const total = memState.entries.length;
-  const rightIdx = memState.spread;
-  const leftIdx = memState.spread - 1;
-
-  // 指示器
-  const indicator = total > 0 ? `${rightIdx + 1} / ${total}` : '0 / 0';
-  document.getElementById('bookPageIndicator').textContent = indicator;
-
-  // 左页：左封面 / 左翻到 entry[spread-1]
-  if (leftIdx >= 0 && leftIdx < total) {
-    renderPage('Left', memState.entries[leftIdx]);
-  } else {
-    // 封面页
-    document.getElementById('bookPageLeftDate').textContent = '';
-    document.getElementById('bookPageLeftType').textContent = '';
-    document.getElementById('bookPageLeftText').innerHTML = `<div class="empty">${escapeHtml(memState.book.title)}<br><span style="font-size:11px;opacity:.7">— 翻开，写下第一页 —</span></div>`;
-  }
-
-  // 右页：entry[spread]
-  if (rightIdx >= 0 && rightIdx < total) {
-    renderPage('Right', memState.entries[rightIdx]);
-  } else {
-    document.getElementById('bookPageRightDate').textContent = '';
-    document.getElementById('bookPageRightType').textContent = '';
-    document.getElementById('bookPageRightText').innerHTML = `<div class="empty">这本书还是空的 · 写下第一页吧</div>`;
-  }
-
-  // 翻页按钮
-  document.getElementById('pagePrev').disabled = memState.spread <= 0;
-  document.getElementById('pageNext').disabled = memState.spread >= total - 1;
-}
-
-function renderPage(side, entry) {
-  const dateStr = entry.date ? String(entry.date).replace(/-/g, ' · ') : '';
-  const meta = entry.meta || {};
-  const extra = [meta.category, meta.mood].filter(Boolean).join(' · ');
-  const typeName = (MEM_TYPE_NAMES[entry.type] || entry.type || '记录') + (extra ? ` · ${extra}` : '');
-  document.getElementById(`bookPage${side}Date`).textContent = dateStr;
-  document.getElementById(`bookPage${side}Type`).textContent = typeName;
-  const text = (entry.content || '').slice(0, 500);
-  document.getElementById(`bookPage${side}Text`).innerHTML = escapeHtml(text);
-}
-
-// ---------- 翻页 ----------
-function turnPage(dir) {
-  if (!memState.book) return;
-  const total = memState.entries.length;
-  if (total === 0) return;
-  const next = memState.spread + dir;
-  if (next < 0 || next > total - 1) return;
-
-  const inner = document.getElementById('bookSpread');
-  inner.classList.remove('flip-next', 'flip-prev');
-  // 强制 reflow，让动画可重复触发
-  void inner.offsetWidth;
-  inner.classList.add(dir > 0 ? 'flip-next' : 'flip-prev');
-
-  memState.spread = next;
-  // 动画过程中先更新（让用户在动画结束时看到新内容）
-  setTimeout(() => renderSpread(), 220);
 }
 
 // ---------- 新建书（弹窗：书名 + 封面色）----------
@@ -1288,8 +1392,8 @@ function openNewBookModal() {
   setTimeout(() => titleInput.focus(), 50);
 }
 
-// ---------- 写新页 ----------
-function openWriteForm() {
+// ---------- 写新页 / 修改 ----------
+function openWriteForm(prefillEntry = null) {
   if (isGuest() || !isConfigured()) {
     alert('登录后才能写下这一页。');
     return;
@@ -1297,16 +1401,37 @@ function openWriteForm() {
   if (!memState.book) return;
   const form = document.getElementById('bookWrite');
   const typeEl = document.getElementById('bookWriteType');
-  typeEl.textContent = (memState.writeType === 'secret' ? '密信 · ' : '日记 · ') + (memState.book.title || '');
-  // 密信不需要分类/心情；普通日记重置选择
-  const isSecret = memState.writeType === 'secret';
+  const textEl = document.getElementById('bookWriteText');
+  const isSecret = memState.writeType === 'secret' || memState.isSprite;
+
   document.getElementById('bookWriteControls').style.display = isSecret ? 'none' : '';
-  if (!isSecret) {
-    document.querySelectorAll('#bookWriteCat .diary-tab').forEach((b) => b.classList.remove('active'));
-    document.querySelectorAll('#bookWriteMood .mood-chip').forEach((b) => b.classList.remove('active'));
+
+  if (prefillEntry) {
+    // 修改模式：预填原文与分类/心情
+    memState.editingId = prefillEntry.id;
+    typeEl.textContent = '修改这一页';
+    textEl.value = prefillEntry.content || '';
+    document.getElementById('bookWriteCount').textContent = `${textEl.value.length} / 500`;
+    if (!isSecret) {
+      const m = prefillEntry.meta || {};
+      document.querySelectorAll('#bookWriteCat .diary-tab').forEach((b) => b.classList.toggle('active', b.dataset.cat === (m.category || '')));
+      document.querySelectorAll('#bookWriteMood .mood-chip').forEach((b) => b.classList.toggle('active', b.dataset.mood === (m.mood || '')));
+    }
+  } else {
+    // 新建模式
+    memState.editingId = null;
+    typeEl.textContent = (isSecret ? '密信 · ' : '日记 · ') + (memState.book.title || '');
+    textEl.value = '';
+    document.getElementById('bookWriteCount').textContent = '0 / 500';
+    if (!isSecret) {
+      document.querySelectorAll('#bookWriteCat .diary-tab').forEach((b) => b.classList.remove('active'));
+      document.querySelectorAll('#bookWriteMood .mood-chip').forEach((b) => b.classList.remove('active'));
+    }
   }
+
+  textEl.placeholder = isSecret ? '把想对精灵说的话写下来，它会读完后回信…' : '今天发生了什么？写进这一页…';
   form.hidden = false;
-  document.getElementById('bookWriteText').focus();
+  textEl.focus();
 }
 
 function closeWriteForm() {
@@ -1323,18 +1448,46 @@ async function saveWriteForm() {
   const saveBtn = document.getElementById('bookWriteSave');
   saveBtn.disabled = true;
   try {
-    // 读取分类 + 心情（单选，可不选）
-    const catBtn = document.querySelector('#bookWriteCat .diary-tab.active');
-    const moodBtn = document.querySelector('#bookWriteMood .mood-chip.active');
-    const meta = {};
-    if (catBtn) meta.category = catBtn.dataset.cat;
-    if (moodBtn) meta.mood = moodBtn.dataset.mood;
-    await chronicle.addEntry(memState.writeType, content, meta, memState.book.id);
+    if (memState.editingId) {
+      // 修改：保留原 meta（含 written_at），追加 edited_at
+      const e = diaryState.list[diaryState.idx];
+      const meta = { ...(e.meta || {}) };
+      if (!memState.isSprite) {
+        const catBtn = document.querySelector('#bookWriteCat .diary-tab.active');
+        const moodBtn = document.querySelector('#bookWriteMood .mood-chip.active');
+        if (catBtn) meta.category = catBtn.dataset.cat; else delete meta.category;
+        if (moodBtn) meta.mood = moodBtn.dataset.mood; else delete meta.mood;
+      }
+      meta.edited_at = new Date().toISOString();
+      await chronicle.updateEntry(memState.editingId, { content, meta });
+    } else if (memState.isSprite) {
+      // 写给精灵 → 延时回信
+      await sendSpriteLetter(content);
+    } else {
+      // 新建日记：读取分类 + 心情（单选，可不选）
+      const catBtn = document.querySelector('#bookWriteCat .diary-tab.active');
+      const moodBtn = document.querySelector('#bookWriteMood .mood-chip.active');
+      const meta = {};
+      if (catBtn) meta.category = catBtn.dataset.cat;
+      if (moodBtn) meta.mood = moodBtn.dataset.mood;
+      await chronicle.addEntry(memState.writeType, content, meta, memState.book.id);
+    }
+
     closeWriteForm();
-    // 重新拉数据并跳到最后一页
+    // 重新拉数据并跳到最新一篇
     memState.entries = await chronicle.getBookEntries(memState.book.id);
-    memState.spread = Math.max(0, memState.entries.length - 1);
-    renderSpread();
+    if (!memState.isSprite) {
+      diaryState.cat = '';
+      document.querySelectorAll('#diaryTabs .diary-tab').forEach((b) => b.classList.toggle('active', !b.dataset.cat));
+      applyDiaryFilter();
+    } else {
+      diaryState.list = memState.entries;
+    }
+    diaryState.idx = Math.max(0, diaryState.list.length - 1);
+    renderDiaryPage();
+
+    // 精灵书：安排后续回信“寄到”定时器
+    if (memState.isSprite) scheduleSpriteReveals();
   } catch (err) {
     alert('保存失败：' + err.message);
   } finally {
@@ -1345,22 +1498,14 @@ async function saveWriteForm() {
 // ---------- 初始化绑定（页面加载时执行一次）----------
 function initMemory() {
   document.getElementById('newBookBtn').addEventListener('click', openNewBookModal);
-  document.getElementById('spriteEntryBtn').addEventListener('click', openSpritePanel);
+  document.getElementById('spriteEntryBtn').addEventListener('click', openSpriteBook);
   document.getElementById('closeBookBtn').addEventListener('click', closeBook);
   document.getElementById('deleteBookBtn').addEventListener('click', deleteCurrentBook);
-  document.getElementById('pagePrev').addEventListener('click', () => turnPage(-1));
-  document.getElementById('pageNext').addEventListener('click', () => turnPage(1));
-  document.getElementById('writePageBtn').addEventListener('click', openWriteForm);
   document.getElementById('bookWriteCancel').addEventListener('click', closeWriteForm);
   document.getElementById('bookWriteSave').addEventListener('click', saveWriteForm);
 
-  // 主视图：三个入口 + 成长日记翻页 + 分类 tab
-  document.getElementById('entryWriteDiary').addEventListener('click', writeNewDiary);
-  document.getElementById('diaryWriteBtn').addEventListener('click', writeNewDiary);
-  document.getElementById('entryShelf').addEventListener('click', showShelf);
-  document.getElementById('entryMilestone').addEventListener('click', showMilestones);
-  document.getElementById('shelfBackBtn').addEventListener('click', showMemoryHome);
-  document.getElementById('milestoneBackBtn').addEventListener('click', showMemoryHome);
+  // 日记：写、翻页、分类 tab
+  document.getElementById('diaryWriteBtn').addEventListener('click', startWrite);
   document.getElementById('diaryPrev').addEventListener('click', () => turnDiary(-1));
   document.getElementById('diaryNext').addEventListener('click', () => turnDiary(1));
   document.getElementById('diaryTabs').addEventListener('click', (e) => {
@@ -1396,10 +1541,10 @@ function initMemory() {
 
   // 键盘翻页
   document.addEventListener('keydown', (e) => {
-    if (document.getElementById('memoryBookView').hidden) return;
+    if (document.getElementById('memoryHomeView').hidden) return;
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
-    if (e.key === 'ArrowLeft')  { e.preventDefault(); turnPage(-1); }
-    if (e.key === 'ArrowRight') { e.preventDefault(); turnPage(1); }
+    if (e.key === 'ArrowLeft')  { e.preventDefault(); turnDiary(-1); }
+    if (e.key === 'ArrowRight') { e.preventDefault(); turnDiary(1); }
     if (e.key === 'Escape')     { e.preventDefault(); closeBook(); }
   });
 }
@@ -1704,7 +1849,6 @@ function boot() {
   initMemory();
   initShopFilter();
   initOracle();
-  initSpriteChat();
 
   const authMsg = document.getElementById('authMsg');
   if (!isConfigured()) {

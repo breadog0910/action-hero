@@ -65,6 +65,32 @@ export async function talk(userText) {
   return reply;
 }
 
+// 仅生成精灵回信文本（不落库）。用于“延时回信”：先把文本备好，
+// 到点再以独立条目写进「精灵密信」书，呈现非实时的对话感。
+export async function spriteReply(userText) {
+  const companion = await getCompanion();
+  const name = companion.name || '小光';
+  const stageName = STAGE_NAMES[companion.stage] || '伙伴';
+
+  let reply;
+  if (hasAIKey()) {
+    const sys = `你是「行动勇者」世界里陪伴用户的伙伴，名字叫${name}，当前是${stageName}阶段。` +
+      `用户会把想说的话写成信寄给你。你温柔、鼓励、不评判，像回信一样用简短（2-4 句）中文回应。` +
+      `可以夸赞完成的事、安抚疲惫或低落、鼓励开始拖延的事。不要长篇大论。`;
+    try {
+      reply = await chat([
+        { role: 'system', content: sys },
+        { role: 'user', content: userText },
+      ], { temperature: 0.9, maxTokens: 250 });
+    } catch (e) {
+      reply = fallbackReply(userText, name);
+    }
+  } else {
+    reply = fallbackReply(userText, name);
+  }
+  return reply;
+}
+
 function fallbackReply(text, name) {
   if (/完成|做了|搞定|成功|打败/.test(text)) {
     return `太棒了！${name}为你骄傲，这个世界因为你又亮了一点。✨`;

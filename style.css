@@ -317,6 +317,46 @@ body {
   0% { transform: scale(1); } 50% { transform: scale(1.12); } 100% { transform: scale(1); }
 }
 
+/* 模式切换（倒计时 / 正计时）与自定义时长 */
+.focus-mode { display: flex; gap: 6px; }
+.mode-chip {
+  padding: 5px 14px;
+  border: 1.5px solid var(--wood-light);
+  border-radius: var(--r-md);
+  background: var(--cream);
+  color: var(--wood-mid);
+  font-size: 11px; font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.mode-chip.active {
+  background: linear-gradient(180deg, var(--wood-mid), var(--wood-deep));
+  border-color: var(--wood-deep);
+  color: var(--cream);
+}
+.custom-min {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; color: var(--wood-mid);
+}
+.custom-min input {
+  width: 48px; padding: 4px 6px;
+  border: 1.5px solid var(--wood-light); border-radius: 8px;
+  font-family: inherit; font-size: 12px; text-align: center;
+}
+
+/* 计划驿站：系统判定难度预览 */
+.diff-preview {
+  font-size: 12px; color: var(--wood-mid);
+  background: var(--parchment);
+  border: 1px dashed var(--wood-light);
+  border-radius: 10px;
+  padding: 6px 10px;
+  margin-top: 2px;
+  text-align: left;
+}
+.diff-preview b { color: var(--gold-deep); }
+
 .stat-row { display: flex; gap: var(--sp-sm); }
 .stat-card {
   flex: 1;
@@ -1579,6 +1619,40 @@ label {
   word-break: break-word;
   flex: 1;
 }
+
+/* 日记页：记录时间 / 修改时间 */
+.diary-page-time {
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--ink-brown);
+  opacity: 0.62;
+  letter-spacing: 0.3px;
+}
+
+/* 日记页：修改 / 删除操作 */
+.diary-page-actions {
+  margin-top: 12px;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.diary-act {
+  font-size: 12px;
+  padding: 5px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--gold-deep);
+  background: var(--cream);
+  color: var(--ink-brown);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.diary-act:hover { background: var(--parchment); }
+.diary-act-danger {
+  border-color: #a8554e;
+  color: #a8554e;
+}
+.diary-act-danger:hover { background: #f7e9e7; }
+
 .diary-empty {
   text-align: center;
   color: var(--ink-gray);

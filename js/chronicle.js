@@ -133,9 +133,13 @@ export async function addEntry(type, content, meta = {}, bookId = null) {
     targetBookId = book.id;
   }
 
+  // 自动保存“写下这一页”的时间（meta.written_at），供日记页展示原始记录时间
+  const safeMeta = { ...(meta || {}) };
+  if (!safeMeta.written_at) safeMeta.written_at = new Date().toISOString();
+
   const { data, error } = await sb
     .from('chronicle')
-    .insert({ user_id: user.id, book_id: targetBookId, type, content, meta })
+    .insert({ user_id: user.id, book_id: targetBookId, type, content, meta: safeMeta })
     .select()
     .single();
   if (error) throw error;
@@ -148,6 +152,43 @@ export async function addEntry(type, content, meta = {}, bookId = null) {
   await refreshBookPageCount(sb, targetBookId);
 
   return data;
+}
+
+// 修改一条编年史（meta 为完整对象，由调用方负责合并旧字段）
+export async function updateEntry(entryId, { content, meta } = {}) {
+  const sb = getClient();
+  const patch = {};
+  if (content !== undefined) patch.content = content;
+  if (meta !== undefined) patch.meta = meta;
+
+  const { data, error } = await sb
+    .from('chronicle')
+    .update(patch)
+    .eq('id', entryId)
+    .select()
+    .single();
+  if (error) throw error;
+
+  if (data && data.book_id) {
+    await sb.from('books').update({ updated_at: new Date().toISOString() }).eq('id', data.book_id);
+  }
+  return data;
+}
+
+// 删除一条编年史（连带维护所属书的页数与更新时间）
+export async function deleteEntry(entryId) {
+  const sb = getClient();
+  const { data: existing } = await sb
+    .from('chronicle')
+    .select('book_id')
+    .eq('id', entryId)
+    .maybeSingle();
+  const { error } = await sb.from('chronicle').delete().eq('id', entryId);
+  if (error) throw error;
+  if (existing && existing.book_id) {
+    await sb.from('books').update({ updated_at: new Date().toISOString() }).eq('id', existing.book_id);
+    await refreshBookPageCount(sb, existing.book_id);
+  }
 }
 
 async function refreshBookPageCount(sb, bookId) {
