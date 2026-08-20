@@ -663,21 +663,11 @@ function initOracle() {
 
 
 // ===== 神奇精灵：实时对话 / 秘密日记（异步回信） =====
+// 说明：UI 入口已迁移到「回忆小屋 · 精灵密信」书内的"找精灵聊聊"按钮。
+// 这里只保留会话逻辑与写回编年史的流程，不再依赖外部 entry-* 按钮。
 let spriteMode = 'chat';   // chat | secret
 
-function initSpriteChat() {
-  document.getElementById('entryJournal').addEventListener('click', () => {
-    if (isGuest() || !isConfigured()) {
-      alert('游客模式下无法写日记，登录后即可把今天写进世界。');
-      return;
-    }
-    const form = document.getElementById('journalForm');
-    form.hidden = !form.hidden;
-    if (!form.hidden) document.getElementById('journalText').focus();
-  });
-
-  document.getElementById('entrySprite').addEventListener('click', openSpritePanel);
-}
+function initSpriteChat() { /* 由 openSpritePanel 触发，不再需要初始绑定 */ }
 
 function openSpritePanel() {
   const online = !isGuest() && isConfigured();
@@ -813,95 +803,371 @@ function bindSecretBox() {
   });
 }
 
-// 生成精灵回信（AI 或固定模板，回信自动写进编年史）
+// 生成精灵回信（AI 或固定模板，回信自动写进编年史 → 精灵密信）
 async function deliverSecretReply(pending, statusEl) {
   try {
     const reply = await talkSprite(`（秘密日记）${pending.text}`);
     if (statusEl) statusEl.textContent = `📮 精灵回复了你：「${reply}」`;
+    // 把回信归档到「精灵密信」书
+    try {
+      await chronicle.addEntry('conversation', `🧚 精灵的回复：${reply}`);
+    } catch (_) { /* 不阻塞主流程 */ }
   } catch (e) {
     if (statusEl) statusEl.textContent = '精灵还在读你的信，稍后再来看看。';
   }
 }
 
-// ===== 回忆小屋：时光相册（chronicle 表最近条目）+ 写日记 =====
-async function renderMemoryView() {
-  const listEl = document.getElementById('memoryList');
-  const countEl = document.getElementById('memoryCount');
-  const journalBtn = document.getElementById('journalBtn');
+// ===== 回忆小屋：书架 + 翻书 =====
+// 数据模型：bookshelf 上每本书（来自 books 表）→ 点开 → 一页页翻（来自 chronicle.book_id = 当前书）
+const MEM_TYPE_NAMES = { journal: '日记', review: '复盘', conversation: '精灵对话', action: '行动', oracle: '求签', secret: '密信' };
+const MEM_TYPE_ICONS = { journal: '📖', review: '🌙', conversation: '💬', action: '⚔️', oracle: '🔮', secret: '💌' };
+const MEM_SPRITE_BOOK_TITLE = '精灵密信';
 
-  let entries = [], total = 0;
-  try {
-    entries = await chronicle.listRecent(10);
-    total = await chronicle.countEntries();
-  } catch (e) { entries = []; }
+let memState = {
+  book: null,            // 当前打开的书（对象）
+  entries: [],           // 当前书全部条目（按 created_at 升序）
+  spread: 0,             // 当前展开：0 表示"打开即见 entry[0]"（左封面 + 右 entry[0]）
+  writeType: 'journal',  // 新页类型
+};
+
+async function renderMemoryView() {
+  // 每次进入回忆小屋：显示书架视图
+  showShelf();
+}
+
+// ---------- 书架 ----------
+async function showShelf() {
+  document.getElementById('memoryShelfView').hidden = false;
+  document.getElementById('memoryBookView').hidden = true;
+
+  const shelf = document.getElementById('bookShelf');
+  const countEl = document.getElementById('shelfCount');
 
   const online = !isGuest() && isConfigured();
-  countEl.textContent = online ? (total > 0 ? `已收藏 ${total} 段回忆` : '') : '';
-  journalBtn.hidden = !online;   // 游客不能写日记
-
-  if (!online || entries.length === 0) {
-    listEl.innerHTML = offlineHint(online ? '还没有回忆，完成第一个任务或写下第一篇日记吧' : '回忆相册是空的');
+  if (!online) {
+    shelf.innerHTML = '';
+    countEl.textContent = '游客模式';
     return;
   }
 
-  const starSvg = '<svg width="18" height="17" viewBox="0 0 18 17" fill="none"><path d="M9 1.2L11.2 5.6L16.1 6.3L12.5 9.7L13.4 14.5L9 12.1L4.6 14.5L5.5 9.7L1.9 6.3L6.8 5.6Z" fill="#C79933"/></svg>';
-  const typeNames = { journal: '日记', review: '复盘', conversation: '对话', action: '行动', oracle: '求签', secret: '秘密日记' };
-  const typeIcons = {
-    journal: '📖', review: '🌙', conversation: '💬', action: '⚔️', oracle: '🔮', secret: '💌',
-  };
+  let books = [];
+  try {
+    books = await chronicle.listBooks();
+    // 首次进入若没书，触发 ensureDefaultBook 创建「我的日记」
+    if (books.length === 0) {
+      await chronicle.ensureDefaultBook();
+      books = await chronicle.listBooks();
+    }
+  } catch (e) {
+    countEl.textContent = '';
+    shelf.innerHTML = offlineHint('打开书架失败，请稍后再试');
+    return;
+  }
 
-  listEl.innerHTML = entries.map((e) => {
-    const brief = (e.content || '').length > 42 ? e.content.slice(0, 42) + '…' : (e.content || '');
-    return `
-    <div class="memory-card">
-      <span class="memory-icon" style="background:var(--gold)">
-        <span style="font-size:20px;">${typeIcons[e.type] || '⭐'}</span>
-      </span>
-      <span class="memory-info">
-        <span class="memory-title">${escapeHtml(brief)}</span>
-        <span class="memory-meta">${e.date || ''} · ${typeNames[e.type] || e.type || '记录'}</span>
-      </span>
-      <span>${starSvg}</span>
-    </div>`;
-  }).join('');
+  countEl.textContent = books.length > 0 ? `共 ${books.length} 本` : '';
+
+  if (books.length === 0) {
+    shelf.innerHTML = '';
+    return;
+  }
+
+  shelf.innerHTML = books.map((b) => `
+    <div class="book-spine" style="background:${escapeHtml(b.cover_color || '#A03E2B')}" data-book-id="${escapeHtml(b.id)}" role="button" tabindex="0">
+      <div class="book-spine-emoji">${escapeHtml(b.cover_emoji || '📖')}</div>
+      <div class="book-spine-title">${escapeHtml(b.title || '未命名')}</div>
+      <div class="book-spine-pages">${b.page_count || 0} 页</div>
+    </div>
+  `).join('');
+
+  // 绑定：点书脊 → 打开
+  shelf.querySelectorAll('.book-spine').forEach((el) => {
+    el.addEventListener('click', () => openBook(el.dataset.bookId));
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openBook(el.dataset.bookId); }
+    });
+  });
 }
 
-// 写日记（登录后可用，保存进 chronicle 表）
-function initJournal() {
-  const btn = document.getElementById('journalBtn');
-  const form = document.getElementById('journalForm');
-  const text = document.getElementById('journalText');
-  const count = document.getElementById('journalCount');
-  const saveBtn = document.getElementById('journalSave');
+// ---------- 打开书 ----------
+async function openBook(bookId) {
+  if (isGuest() || !isConfigured()) {
+    alert('登录后才能翻阅书页哦。');
+    return;
+  }
+  try {
+    const books = await chronicle.listBooks();
+    const book = books.find((b) => b.id === bookId);
+    if (!book) { await showShelf(); return; }
 
-  btn.addEventListener('click', () => {
-    form.hidden = !form.hidden;
-    if (!form.hidden) text.focus();
-  });
-  document.getElementById('journalCancel').addEventListener('click', () => {
-    form.hidden = true;
-    text.value = '';
-    count.textContent = '0 / 200';
-  });
-  text.addEventListener('input', () => {
-    if (text.value.length > 200) text.value = text.value.slice(0, 200);
-    count.textContent = `${text.value.length} / 200`;
-  });
-  saveBtn.addEventListener('click', async () => {
-    const content = text.value.trim();
-    if (!content) { text.focus(); return; }
-    saveBtn.disabled = true;
-    try {
-      await chronicle.addEntry('journal', content);
-      form.hidden = true;
-      text.value = '';
-      count.textContent = '0 / 200';
-      renderMemoryView();
-    } catch (err) {
-      alert('保存回忆失败：' + err.message);
-    } finally {
-      saveBtn.disabled = false;
+    memState.book = book;
+    memState.entries = await chronicle.getBookEntries(bookId);
+    // 默认打开到最后一页（最新一页）；空书时 spread = 0
+    memState.spread = memState.entries.length > 0 ? memState.entries.length - 1 : 0;
+    memState.writeType = (book.title === MEM_SPRITE_BOOK_TITLE) ? 'secret' : 'journal';
+
+    document.getElementById('bookTitleHeader').textContent = book.title || '未命名';
+    document.getElementById('bookDesc').textContent = book.description || '· 翻开 · 写下一页 · 留下一段回忆 ·';
+    document.getElementById('deleteBookBtn').style.display = (book.title === '我的日记') ? 'none' : '';
+
+    // 精灵密信书：底部增加"找精灵聊聊"按钮 + 改写新页按钮文案
+    const writeBtn = document.getElementById('writePageBtn');
+    const writeLabel = document.getElementById('writePageLabel');
+    let spriteBtn = document.getElementById('spriteChatBtn');
+    if (book.title === MEM_SPRITE_BOOK_TITLE) {
+      if (!spriteBtn) {
+        spriteBtn = document.createElement('button');
+        spriteBtn.id = 'spriteChatBtn';
+        spriteBtn.className = 'btn btn-secondary btn-small';
+        spriteBtn.style.marginRight = '6px';
+        spriteBtn.textContent = '🧚 找精灵聊聊';
+        writeBtn.parentNode.insertBefore(spriteBtn, writeBtn);
+        spriteBtn.addEventListener('click', openSpritePanel);
+      }
+      writeLabel.textContent = '写封密信';
+    } else {
+      if (spriteBtn) spriteBtn.remove();
+      writeLabel.textContent = '写新页';
     }
+
+    document.getElementById('memoryShelfView').hidden = true;
+    document.getElementById('memoryBookView').hidden = false;
+    document.getElementById('bookWrite').hidden = true;
+    document.getElementById('bookWriteText').value = '';
+    document.getElementById('bookWriteCount').textContent = '0 / 500';
+
+    renderSpread();
+  } catch (e) {
+    alert('打开书失败：' + e.message);
+  }
+}
+
+function closeBook() {
+  memState.book = null;
+  memState.entries = [];
+  memState.spread = 0;
+  document.getElementById('memoryShelfView').hidden = false;
+  document.getElementById('memoryBookView').hidden = true;
+  showShelf();
+}
+
+async function deleteCurrentBook() {
+  if (!memState.book) return;
+  if (memState.book.title === '我的日记') {
+    alert('「我的日记」是默认书，不能删除。');
+    return;
+  }
+  if (!confirm(`确定删除「${memState.book.title}」吗？书内所有页面都会消失。`)) return;
+  try {
+    await chronicle.deleteBook(memState.book.id);
+    closeBook();
+  } catch (e) {
+    alert('删除失败：' + e.message);
+  }
+}
+
+// ---------- 渲染当前铺面 ----------
+function renderSpread() {
+  if (!memState.book) return;
+  const total = memState.entries.length;
+  const rightIdx = memState.spread;
+  const leftIdx = memState.spread - 1;
+
+  // 指示器
+  const indicator = total > 0 ? `${rightIdx + 1} / ${total}` : '0 / 0';
+  document.getElementById('bookPageIndicator').textContent = indicator;
+
+  // 左页：左封面 / 左翻到 entry[spread-1]
+  if (leftIdx >= 0 && leftIdx < total) {
+    renderPage('Left', memState.entries[leftIdx]);
+  } else {
+    // 封面页
+    document.getElementById('bookPageLeftDate').textContent = '';
+    document.getElementById('bookPageLeftType').textContent = '';
+    document.getElementById('bookPageLeftText').innerHTML = `<div class="empty">${escapeHtml(memState.book.title)}<br><span style="font-size:11px;opacity:.7">— 翻开，写下第一页 —</span></div>`;
+  }
+
+  // 右页：entry[spread]
+  if (rightIdx >= 0 && rightIdx < total) {
+    renderPage('Right', memState.entries[rightIdx]);
+  } else {
+    document.getElementById('bookPageRightDate').textContent = '';
+    document.getElementById('bookPageRightType').textContent = '';
+    document.getElementById('bookPageRightText').innerHTML = `<div class="empty">这本书还是空的 · 写下第一页吧 ✨</div>`;
+  }
+
+  // 翻页按钮
+  document.getElementById('pagePrev').disabled = memState.spread <= 0;
+  document.getElementById('pageNext').disabled = memState.spread >= total - 1;
+}
+
+function renderPage(side, entry) {
+  const dateStr = entry.date ? String(entry.date).replace(/-/g, ' · ') : '';
+  const typeName = MEM_TYPE_NAMES[entry.type] || entry.type || '记录';
+  const typeIcon = MEM_TYPE_ICONS[entry.type] || '⭐';
+  document.getElementById(`bookPage${side}Date`).textContent = dateStr;
+  document.getElementById(`bookPage${side}Type`).textContent = `${typeIcon} ${typeName}`;
+  const text = (entry.content || '').slice(0, 500);
+  document.getElementById(`bookPage${side}Text`).innerHTML = `<span class="type-icon">${typeIcon}</span>${escapeHtml(text)}`;
+}
+
+// ---------- 翻页 ----------
+function turnPage(dir) {
+  if (!memState.book) return;
+  const total = memState.entries.length;
+  if (total === 0) return;
+  const next = memState.spread + dir;
+  if (next < 0 || next > total - 1) return;
+
+  const inner = document.getElementById('bookSpread');
+  inner.classList.remove('flip-next', 'flip-prev');
+  // 强制 reflow，让动画可重复触发
+  void inner.offsetWidth;
+  inner.classList.add(dir > 0 ? 'flip-next' : 'flip-prev');
+
+  memState.spread = next;
+  // 动画过程中先更新（让用户在动画结束时看到新内容）
+  setTimeout(() => renderSpread(), 220);
+}
+
+// ---------- 新建书（弹窗：选封面 + 书名）----------
+const NEW_BOOK_EMOJIS = ['📕', '📗', '📘', '📙', '🗺️', '🌙', '✈️', '🌸', '💡', '📝', '🎨', '🧪'];
+const NEW_BOOK_COLORS = ['#A03E2B', '#3F6E8A', '#4A6E3A', '#7A4B7C', '#B47A2A', '#3E5C7A', '#6E3030', '#335E4A'];
+
+function openNewBookModal() {
+  if (isGuest() || !isConfigured()) {
+    alert('登录后才能新建书本。');
+    return;
+  }
+  let pickedEmoji = NEW_BOOK_EMOJIS[0];
+  let pickedColor = NEW_BOOK_COLORS[0];
+
+  openModal(`
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+      <span style="font-size:24px">📚</span>
+      <div>
+        <div style="font-weight:700;color:var(--ink-brown)">新建一本</div>
+        <div style="font-size:11px;color:var(--ink-gray)">为不同主题开一本书：旅行、灵感、复盘…</div>
+      </div>
+    </div>
+    <label>选个封面</label>
+    <div class="newbook-palette" id="newbookEmoji">
+      ${NEW_BOOK_EMOJIS.map((e, i) => `<button data-emoji="${e}" class="${i === 0 ? 'active' : ''}" style="background:var(--cream)">${e}</button>`).join('')}
+    </div>
+    <label>选个书脊色</label>
+    <div class="newbook-colors" id="newbookColor">
+      ${NEW_BOOK_COLORS.map((c, i) => `<button data-color="${c}" class="${i === 0 ? 'active' : ''}" style="background:${c}"></button>`).join('')}
+    </div>
+    <div class="newbook-form">
+      <label>书名</label>
+      <input id="newbookTitle" maxlength="20" placeholder="例如：旅行日志">
+      <label>简介（可选）</label>
+      <input id="newbookDesc" maxlength="40" placeholder="一句话说说这本书">
+      <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:6px;">
+        <button class="btn btn-secondary btn-small" id="newbookCancel">取消</button>
+        <button class="btn btn-primary btn-small" id="newbookSave">创建</button>
+      </div>
+    </div>
+  `);
+
+  const emojiRow = document.getElementById('newbookEmoji');
+  const colorRow = document.getElementById('newbookColor');
+  emojiRow.addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    emojiRow.querySelectorAll('button').forEach((x) => x.classList.remove('active'));
+    b.classList.add('active');
+    pickedEmoji = b.dataset.emoji;
+  });
+  colorRow.addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    colorRow.querySelectorAll('button').forEach((x) => x.classList.remove('active'));
+    b.classList.add('active');
+    pickedColor = b.dataset.color;
+  });
+  document.getElementById('newbookCancel').addEventListener('click', closeModal);
+  document.getElementById('newbookSave').addEventListener('click', async () => {
+    const title = document.getElementById('newbookTitle').value.trim();
+    if (!title) { document.getElementById('newbookTitle').focus(); return; }
+    const description = document.getElementById('newbookDesc').value.trim();
+    try {
+      const book = await chronicle.createBook({ title, cover_emoji: pickedEmoji, cover_color: pickedColor, description });
+      closeModal();
+      await showShelf();
+      // 直接打开新书
+      openBook(book.id);
+    } catch (err) {
+      alert('创建失败：' + err.message);
+    }
+  });
+  setTimeout(() => document.getElementById('newbookTitle').focus(), 50);
+}
+
+// ---------- 写新页 ----------
+function openWriteForm() {
+  if (isGuest() || !isConfigured()) {
+    alert('登录后才能写下这一页。');
+    return;
+  }
+  if (!memState.book) return;
+  const form = document.getElementById('bookWrite');
+  const typeEl = document.getElementById('bookWriteType');
+  typeEl.textContent = (memState.writeType === 'secret' ? '密信 · ' : '日记 · ') + (memState.book.title || '');
+  form.hidden = false;
+  document.getElementById('bookWriteText').focus();
+}
+
+function closeWriteForm() {
+  document.getElementById('bookWrite').hidden = true;
+  document.getElementById('bookWriteText').value = '';
+  document.getElementById('bookWriteCount').textContent = '0 / 500';
+}
+
+async function saveWriteForm() {
+  if (!memState.book) return;
+  const text = document.getElementById('bookWriteText');
+  const content = text.value.trim();
+  if (!content) { text.focus(); return; }
+  const saveBtn = document.getElementById('bookWriteSave');
+  saveBtn.disabled = true;
+  try {
+    await chronicle.addEntry(memState.writeType, content, {}, memState.book.id);
+    closeWriteForm();
+    // 重新拉数据并跳到最后一页
+    memState.entries = await chronicle.getBookEntries(memState.book.id);
+    memState.spread = Math.max(0, memState.entries.length - 1);
+    renderSpread();
+  } catch (err) {
+    alert('保存失败：' + err.message);
+  } finally {
+    saveBtn.disabled = false;
+  }
+}
+
+// ---------- 初始化绑定（页面加载时执行一次）----------
+function initMemory() {
+  document.getElementById('newBookBtn').addEventListener('click', openNewBookModal);
+  document.getElementById('closeBookBtn').addEventListener('click', closeBook);
+  document.getElementById('deleteBookBtn').addEventListener('click', deleteCurrentBook);
+  document.getElementById('pagePrev').addEventListener('click', () => turnPage(-1));
+  document.getElementById('pageNext').addEventListener('click', () => turnPage(1));
+  document.getElementById('writePageBtn').addEventListener('click', openWriteForm);
+  document.getElementById('bookWriteCancel').addEventListener('click', closeWriteForm);
+  document.getElementById('bookWriteSave').addEventListener('click', saveWriteForm);
+
+  // 字符计数 + 限长
+  const text = document.getElementById('bookWriteText');
+  const count = document.getElementById('bookWriteCount');
+  text.addEventListener('input', () => {
+    if (text.value.length > 500) text.value = text.value.slice(0, 500);
+    count.textContent = `${text.value.length} / 500`;
+  });
+
+  // 键盘翻页
+  document.addEventListener('keydown', (e) => {
+    if (document.getElementById('memoryBookView').hidden) return;
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+    if (e.key === 'ArrowLeft')  { e.preventDefault(); turnPage(-1); }
+    if (e.key === 'ArrowRight') { e.preventDefault(); turnPage(1); }
+    if (e.key === 'Escape')     { e.preventDefault(); closeBook(); }
   });
 }
 
@@ -1202,7 +1468,7 @@ function boot() {
   album.initAlbum();
   initModal();
   initFocusTimer();
-  initJournal();
+  initMemory();
   initShopFilter();
   initOracle();
   initSpriteChat();

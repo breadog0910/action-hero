@@ -91,16 +91,42 @@ create table if not exists public.actions (
   created_at timestamptz not null default now()
 );
 
+-- ---------- 11. 书本（日记本）----------
+-- 一本"书"可装多页编年史：日记、复盘、对话、行动、求签、密信都归档其中。
+-- 默认会有一本「我的日记」；用户也可新建多本（旅行/灵感/读书笔记…）。
+create table if not exists public.books (
+  id text primary key,                          -- 12 位书本码：BK + 10 位序号
+  user_id uuid not null references auth.users(id) on delete cascade,
+  title text not null,                          -- 书名（必填）
+  cover_emoji text not null default '📖',       -- 封面图标
+  cover_color text not null default '#A03E2B',  -- 书脊/封面颜色
+  description text,                             -- 简介
+  page_count int not null default 0,            -- 冗余字段：当前页数
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+comment on table public.books is '书本：把编年史按"一本书"聚合，支持多本并存、独立翻阅';
+comment on column public.books.id is '12 位书本码，BK + 10 位数字，如 BK0000000001';
+comment on column public.books.title is '书名（用户可改）';
+comment on column public.books.cover_emoji is '封面图标 emoji';
+comment on column public.books.cover_color is '书脊/封面色（hex）';
+comment on column public.books.description is '书本简介';
+comment on column public.books.page_count is '页数（冗余字段，写入时维护）';
+
 -- ---------- 6. 编年史（日记/复盘/对话/行动/求签）----------
 create table if not exists public.chronicle (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
-  type text not null,                       -- journal/review/conversation/action/oracle
+  book_id text references public.books(id) on delete cascade,  -- 归属书本
+  type text not null,                       -- journal/review/conversation/action/oracle/secret
   content text,
   meta jsonb,
   date date not null default current_date,
   created_at timestamptz not null default now()
 );
+
+comment on column public.chronicle.book_id is '归属书本（FK → books.id），NULL 表示未归档（兼容历史数据）';
 
 -- ---------- 7. 掉落物目录（静态）----------
 create table if not exists public.items (
@@ -144,6 +170,8 @@ create index if not exists idx_tasks_user on public.tasks(user_id);
 create index if not exists idx_player_quests_user on public.player_quests(user_id, sort_order);
 create index if not exists idx_actions_user on public.actions(user_id, created_at);
 create index if not exists idx_chronicle_user on public.chronicle(user_id, date);
+create index if not exists idx_chronicle_book on public.chronicle(book_id, created_at);
+create index if not exists idx_books_user on public.books(user_id, updated_at desc);
 create index if not exists idx_receipts_user on public.receipts(user_id, created_at);
 
 -- =====================================================
@@ -154,6 +182,7 @@ alter table public.world enable row level security;
 alter table public.companion enable row level security;
 alter table public.tasks enable row level security;
 alter table public.player_quests enable row level security;
+alter table public.books enable row level security;
 alter table public.actions enable row level security;
 alter table public.chronicle enable row level security;
 alter table public.collection enable row level security;
@@ -197,6 +226,11 @@ drop policy if exists "player_quests_own" on public.player_quests;
 create policy "player_quests_own" on public.player_quests
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
+-- books（用户列 = user_id）
+drop policy if exists "books_own" on public.books;
+create policy "books_own" on public.books
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
 -- collection（复合主键，无独立 id，用户列 = user_id）
 drop policy if exists "collection_own" on public.collection;
 create policy "collection_own" on public.collection
@@ -208,18 +242,27 @@ drop policy if exists "items_read" on public.items;
 create policy "items_read" on public.items for select using (true);
 
 -- =====================================================
--- 新用户注册时自动初始化世界/伙伴/领地/档案
+-- 新用户注册时自动初始化世界/伙伴/领地/档案 + 默认书
 -- =====================================================
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
 security definer set search_path = public
 as $$
+declare
+  v_book_id text;
 begin
   insert into public.profiles (id) values (new.id) on conflict do nothing;
   insert into public.world (user_id) values (new.id) on conflict do nothing;
   insert into public.companion (user_id) values (new.id) on conflict do nothing;
   insert into public.territory (user_id) values (new.id) on conflict do nothing;
+
+  -- 种子一本「我的日记」：使用 BK + 10 位序号，按 user 段错开，避免全局冲突
+  v_book_id := 'BK' || lpad(replace(new.id::text, '-', ''), 10, '0');
+  insert into public.books (id, user_id, title, cover_emoji, cover_color, description)
+  values (v_book_id, new.id, '我的日记', '📖', '#A03E2B', '记录每一天的心情与故事')
+  on conflict (id) do nothing;
+
   return new;
 end;
 $$;

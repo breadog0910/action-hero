@@ -236,43 +236,93 @@
       </div>
     </section>
 
-    <!-- 屏幕：回忆小屋 -->
+    <!-- 屏幕：回忆小屋 · 书架 -->
     <section id="screen-memory" class="screen" hidden>
       <header class="subheader">
         <button class="icon-btn icon-back" data-back="hub" aria-label="返回"><svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M11 3L5 9L11 15" stroke="#59381E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
         <h1 class="sub-title">回忆小屋</h1>
+        <button class="icon-btn icon-back" id="newBookBtn" aria-label="新建书" style="margin-left:auto;background:var(--gold);border-color:var(--gold-deep);color:var(--cream)">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 3V13M3 8H13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
       </header>
-      <div class="scene"><img src="assets/images/house-scene.png" alt="回忆小屋场景"></div>
-      <div class="content">
-        <div class="entry-row">
-          <button class="entry-card entry-journal" id="entryJournal">
-            <span class="entry-icon">📖</span>
-            <span class="entry-info"><span class="entry-name">我的日记</span><span class="entry-sub">记录今日心情</span></span>
-            <span class="entry-arrow">›</span>
-          </button>
-          <button class="entry-card entry-sprite" id="entrySprite">
-            <span class="entry-icon">🧚</span>
-            <span class="entry-info"><span class="entry-name">神奇精灵</span><span class="entry-sub">秘密日记 · 精灵会回复你</span></span>
-            <span class="entry-arrow">›</span>
-          </button>
+
+      <!-- 视图 A：书架 -->
+      <div class="memory-view" id="memoryShelfView">
+        <div class="scene"><img src="assets/images/house-scene.png" alt="回忆小屋场景"></div>
+        <div class="content">
+          <div class="section-head">
+            <h2 class="section-title">我的书架</h2>
+            <span class="section-count" id="shelfCount">—</span>
+          </div>
+          <div class="bookshelf-scene">
+            <div class="bookshelf" id="bookShelf">
+              <!-- 书脊由 main.js 渲染 -->
+            </div>
+            <div class="bookshelf-leg left"></div>
+            <div class="bookshelf-leg right"></div>
+          </div>
+          <p class="bookshelf-hint">点击一本书翻阅 · 右上角 ＋ 新建一本</p>
         </div>
-        <div class="section-head">
-          <h2 class="section-title">时光相册</h2>
-          <span class="section-count" id="memoryCount"></span>
-          <button class="btn btn-secondary btn-small" id="journalBtn" hidden>
-            <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2.5 11.5L6.5 3.5L10.5 11.5M4 7.5H9" stroke="#855938" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            写日记
+      </div>
+
+      <!-- 视图 B：打开的书 -->
+      <div class="memory-view" id="memoryBookView" hidden>
+        <header class="subheader subheader-book">
+          <button class="icon-btn icon-back" id="closeBookBtn" aria-label="返回书架"><svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M11 3L5 9L11 15" stroke="#59381E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+          <h1 class="sub-title" id="bookTitleHeader">我的日记</h1>
+          <button class="icon-btn icon-back" id="deleteBookBtn" aria-label="删除书" style="margin-left:auto;background:var(--parchment-dark)">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 4H13M6 4V2.5H10V4M5 4L5.5 13.5H10.5L11 4" stroke="#59381E" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
-        </div>
-        <div class="journal-form" id="journalForm" hidden>
-          <textarea id="journalText" rows="3" maxlength="200" placeholder="今天发生了什么？写进世界的记忆里…"></textarea>
-          <div class="journal-actions">
-            <span class="journal-count" id="journalCount">0 / 200</span>
-            <button class="btn btn-secondary btn-small" id="journalCancel">取消</button>
-            <button class="btn btn-primary btn-small" id="journalSave">保存回忆</button>
+        </header>
+        <div class="content book-content">
+          <p class="book-desc" id="bookDesc">—</p>
+
+          <!-- 翻开书：两页铺面 -->
+          <div class="open-book" id="openBook" data-spread="0">
+            <button class="page-flip page-flip-prev" id="pagePrev" aria-label="上一页">
+              <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M14 5L7 11L14 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <div class="book-spread" id="bookSpread">
+              <div class="book-page book-page-left" id="bookPageLeft">
+                <div class="book-page-inner">
+                  <div class="book-page-date" id="bookPageLeftDate">—</div>
+                  <div class="book-page-type" id="bookPageLeftType"></div>
+                  <div class="book-page-text" id="bookPageLeftText"></div>
+                </div>
+              </div>
+              <div class="book-spine"></div>
+              <div class="book-page book-page-right" id="bookPageRight">
+                <div class="book-page-inner">
+                  <div class="book-page-date" id="bookPageRightDate">—</div>
+                  <div class="book-page-type" id="bookPageRightType"></div>
+                  <div class="book-page-text" id="bookPageRightText"></div>
+                </div>
+              </div>
+            </div>
+            <button class="page-flip page-flip-next" id="pageNext" aria-label="下一页">
+              <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M8 5L15 11L8 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+          </div>
+
+          <div class="book-foot">
+            <span class="book-page-indicator" id="bookPageIndicator">0 / 0</span>
+            <button class="btn btn-primary btn-small" id="writePageBtn">
+              <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2 12L4 10L11 3L12 4L5 11L3 12M2 12H12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span id="writePageLabel">写新页</span>
+            </button>
+          </div>
+
+          <!-- 写作区 -->
+          <div class="book-write" id="bookWrite" hidden>
+            <div class="book-write-type" id="bookWriteType">日记</div>
+            <textarea id="bookWriteText" rows="6" maxlength="500" placeholder="今天发生了什么？写进这一页…"></textarea>
+            <div class="book-write-foot">
+              <span class="book-write-count" id="bookWriteCount">0 / 500</span>
+              <button class="btn btn-secondary btn-small" id="bookWriteCancel">取消</button>
+              <button class="btn btn-primary btn-small" id="bookWriteSave">保存这一页</button>
+            </div>
           </div>
         </div>
-        <div id="memoryList"><!-- 回忆卡（main.js 渲染） --></div>
       </div>
     </section>
 

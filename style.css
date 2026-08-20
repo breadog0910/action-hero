@@ -1099,3 +1099,368 @@ label {
 .album-empty-emoji { font-size: 44px; }
 .album-empty-title { font-size: 14px; font-weight: 700; color: var(--ink-brown); }
 .album-empty-sub { font-size: 11px; color: var(--ink-gray); margin-bottom: 4px; }
+
+/* ============ 回忆小屋 · 书架 + 书本 ============ */
+.memory-view { animation: fade-in 0.2s ease; }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+/* ---------- 书架（横排书脊）---------- */
+.bookshelf-scene {
+  position: relative;
+  margin: 6px 0 4px;
+  padding: 22px 12px 18px;
+  background: linear-gradient(180deg, rgba(95, 60, 32, 0.06) 0%, rgba(95, 60, 32, 0.02) 100%);
+  border-radius: 14px;
+  border: 1px solid rgba(95, 60, 32, 0.08);
+}
+.bookshelf {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  min-height: 168px;
+  padding: 0 4px 8px;
+  border-bottom: 8px solid #7A4B2A;     /* 书架木板 */
+  border-bottom-left-radius: 4px;
+  border-bottom-right-radius: 4px;
+  box-shadow: 0 4px 0 -1px #5C371B, 0 8px 16px -6px rgba(60, 30, 10, 0.25);
+  position: relative;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+.bookshelf::-webkit-scrollbar { height: 4px; }
+.bookshelf::-webkit-scrollbar-thumb { background: var(--gold); border-radius: 2px; }
+.bookshelf:empty::before {
+  content: '书架上还没有书 · 点右上角 ＋ 新建一本';
+  display: block;
+  width: 100%;
+  text-align: center;
+  font-size: 12px;
+  color: var(--ink-gray);
+  padding: 60px 0 40px;
+  font-style: italic;
+}
+.bookshelf-leg {
+  position: absolute;
+  bottom: -8px;
+  width: 14px;
+  height: 16px;
+  background: linear-gradient(180deg, #5C371B 0%, #3E2410 100%);
+  border-radius: 0 0 3px 3px;
+}
+.bookshelf-leg.left { left: 18px; }
+.bookshelf-leg.right { right: 18px; }
+.bookshelf-hint {
+  text-align: center;
+  font-size: 11px;
+  color: var(--ink-gray);
+  margin: 8px 0 0;
+}
+
+/* 单本书（书脊） */
+.book-spine {
+  flex: 0 0 auto;
+  width: 64px;
+  height: 150px;
+  border-radius: 6px 6px 3px 3px;
+  padding: 10px 6px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  position: relative;
+  color: rgba(255, 247, 230, 0.95);
+  font-weight: 700;
+  text-align: center;
+  box-shadow:
+    inset -2px 0 0 rgba(0, 0, 0, 0.18),
+    inset 2px 0 0 rgba(255, 255, 255, 0.12),
+    0 4px 8px -2px rgba(60, 30, 10, 0.35);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  user-select: none;
+}
+.book-spine:active { transform: translateY(2px); }
+.book-spine-emoji { font-size: 24px; line-height: 1; filter: drop-shadow(0 1px 0 rgba(0,0,0,0.3)); }
+.book-spine-title {
+  font-size: 11px;
+  line-height: 1.2;
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  letter-spacing: 2px;
+  max-height: 92px;
+  overflow: hidden;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+}
+.book-spine-pages {
+  position: absolute;
+  bottom: 4px; left: 50%;
+  transform: translateX(-50%);
+  font-size: 9px;
+  font-weight: 600;
+  color: rgba(255, 247, 230, 0.7);
+  background: none;
+  writing-mode: horizontal-tb;
+  letter-spacing: 0;
+}
+.book-spine.empty {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--cream) 0 6px,
+    var(--parchment-dark) 6px 12px
+  );
+  color: var(--ink-gray);
+  border: 1.5px dashed var(--gold);
+  box-shadow: none;
+}
+.book-spine.empty .book-spine-title { writing-mode: horizontal-tb; letter-spacing: 0; }
+.book-spine.empty .book-spine-emoji { opacity: 0.5; }
+.book-spine.empty .book-spine-pages { display: none; }
+
+/* ---------- 打开的书 ---------- */
+.subheader-book {
+  background: var(--cream);
+  border-bottom: 1px solid rgba(95, 60, 32, 0.1);
+}
+.book-content { padding: 12px 14px 18px; }
+.book-desc {
+  text-align: center;
+  font-size: 12px;
+  color: var(--ink-gray);
+  margin: 0 0 10px;
+  font-style: italic;
+}
+
+.open-book {
+  position: relative;
+  perspective: 1200px;
+  margin: 0 auto 12px;
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+.book-spread {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 12px 1fr;
+  background: linear-gradient(180deg, #FBF3DE 0%, #F0E3C2 100%);
+  border-radius: 6px;
+  border: 1px solid rgba(95, 60, 32, 0.18);
+  box-shadow:
+    0 2px 0 -1px rgba(95, 60, 32, 0.15),
+    0 8px 18px -6px rgba(60, 30, 10, 0.35);
+  overflow: hidden;
+  position: relative;
+  min-height: 320px;
+  transform-style: preserve-3d;
+  transition: transform 0.45s cubic-bezier(0.4, 0.0, 0.2, 1);
+}
+.book-spread.turning-next { transform: translateX(-6px) rotateY(2deg); }
+.book-spread.turning-prev { transform: translateX(6px) rotateY(-2deg); }
+
+.book-page {
+  position: relative;
+  padding: 18px 16px 16px;
+  display: flex;
+  background-image:
+    linear-gradient(180deg, transparent 27px, rgba(95, 60, 32, 0.10) 28px, transparent 29px),
+    linear-gradient(180deg, transparent 55px, rgba(95, 60, 32, 0.10) 56px, transparent 57px),
+    linear-gradient(180deg, transparent 83px, rgba(95, 60, 32, 0.10) 84px, transparent 85px);
+  background-size: 100% 28px;
+}
+.book-page-left  { background-color: #FBF3DE; }
+.book-page-right { background-color: #F8EFD6; }
+.book-page::before {
+  content: '';
+  position: absolute;
+  top: 8px; bottom: 8px;
+  width: 1px;
+  background: rgba(198, 153, 51, 0.35);
+}
+.book-page-left::before  { right: 6px; }
+.book-page-right::before { left: 6px; }
+.book-page-inner {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.book-page-date {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--gold-deep);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.book-page-type {
+  font-size: 10px;
+  color: var(--ink-gray);
+  font-weight: 600;
+}
+.book-page-text {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--ink-brown);
+  white-space: pre-wrap;
+  word-break: break-word;
+  min-height: 220px;
+  font-family: "Songti SC", "STSong", "Source Han Serif SC", serif;
+}
+.book-page-text .type-icon { font-size: 14px; margin-right: 4px; }
+.book-page-text .empty {
+  color: var(--ink-gray);
+  font-style: italic;
+  text-align: center;
+  display: block;
+  margin-top: 32px;
+  font-family: inherit;
+  font-size: 12px;
+}
+
+/* 中间书脊 */
+.book-spread .book-spine {
+  flex: 0 0 12px;
+  width: 12px;
+  height: auto;
+  min-height: 100%;
+  background: linear-gradient(90deg,
+    rgba(95, 60, 32, 0.18) 0%,
+    rgba(95, 60, 32, 0.32) 30%,
+    rgba(95, 60, 32, 0.40) 50%,
+    rgba(95, 60, 32, 0.32) 70%,
+    rgba(95, 60, 32, 0.18) 100%
+  );
+  box-shadow: none;
+  border-radius: 0;
+  writing-mode: horizontal-tb;
+  color: transparent;
+  cursor: default;
+  padding: 0;
+  position: relative;
+}
+.book-spread .book-spine::before,
+.book-spread .book-spine::after { display: none; }
+.book-spread .book-spine * { display: none; }
+
+/* 翻页按钮 */
+.page-flip {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: var(--cream);
+  border: 1.5px solid var(--gold);
+  color: var(--ink-brown);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 6px -1px rgba(60, 30, 10, 0.25);
+  transition: transform 0.15s ease, background 0.15s ease;
+  z-index: 2;
+}
+.page-flip:active { transform: translateY(-50%) scale(0.92); }
+.page-flip:disabled { opacity: 0.35; cursor: not-allowed; }
+.page-flip-prev { left: -6px; }
+.page-flip-next { right: -6px; }
+
+/* 翻页动画容器（左右两侧接收滑入动画） */
+.book-spread.flip-next  { animation: flipNext 0.45s ease both; }
+.book-spread.flip-prev  { animation: flipPrev 0.45s ease both; }
+@keyframes flipNext {
+  0%   { transform: translateX(0)  rotateY(0);   opacity: 1; }
+  40%  { transform: translateX(-8%) rotateY(-3deg); opacity: 0.6; }
+  100% { transform: translateX(0)  rotateY(0);   opacity: 1; }
+}
+@keyframes flipPrev {
+  0%   { transform: translateX(0)  rotateY(0);   opacity: 1; }
+  40%  { transform: translateX(8%)  rotateY(3deg);  opacity: 0.6; }
+  100% { transform: translateX(0)  rotateY(0);   opacity: 1; }
+}
+
+/* 底部工具条 */
+.book-foot {
+  display: flex; align-items: center; justify-content: space-between;
+  margin: 8px 0 4px;
+  padding: 0 4px;
+}
+.book-page-indicator {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-brown);
+  background: var(--parchment-dark);
+  padding: 4px 10px;
+  border-radius: 12px;
+}
+
+/* ---------- 写新页（打开书后的写作区）---------- */
+.book-write {
+  margin-top: 10px;
+  padding: 12px;
+  background: linear-gradient(180deg, var(--cream) 0%, var(--parchment) 100%);
+  border: 1.5px dashed var(--gold);
+  border-radius: 10px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.book-write-type {
+  font-size: 10px;
+  color: var(--gold-deep);
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+.book-write textarea {
+  width: 100%;
+  resize: vertical;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(95, 60, 32, 0.15);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--ink-brown);
+  font-family: inherit;
+  line-height: 1.6;
+}
+.book-write textarea:focus { outline: none; border-color: var(--gold); }
+.book-write-foot {
+  display: flex; align-items: center; gap: 6px;
+}
+.book-write-count { font-size: 11px; color: var(--ink-gray); margin-right: auto; }
+
+/* 模态弹窗里的"新建书" */
+.newbook-palette {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  margin: 4px 0 12px;
+}
+.newbook-palette button {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  font-size: 16px;
+  display: flex; align-items: center; justify-content: center;
+  transition: transform 0.1s ease, border-color 0.1s ease;
+}
+.newbook-palette button:active { transform: scale(0.92); }
+.newbook-palette button.active { border-color: var(--ink-brown); }
+.newbook-colors { display: flex; gap: 8px; margin: 4px 0 12px; }
+.newbook-colors button {
+  width: 26px; height: 26px; border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+}
+.newbook-colors button.active { border-color: var(--ink-brown); }
+.newbook-form { display: flex; flex-direction: column; gap: 8px; }
+.newbook-form input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid rgba(95, 60, 32, 0.2);
+  border-radius: 6px;
+  background: var(--cream);
+  color: var(--ink-brown);
+  font-size: 13px;
+  font-family: inherit;
+}
+.newbook-form input:focus { outline: none; border-color: var(--gold); }
+.newbook-form label {
+  font-size: 11px; color: var(--ink-gray); font-weight: 600;
+  margin-bottom: -4px;
+}
