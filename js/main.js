@@ -30,7 +30,7 @@ window.addEventListener('orientationchange', () => setTimeout(fitPhone, 120));
 if (window.visualViewport) window.visualViewport.addEventListener('resize', fitPhone);
 
 // ===== 屏幕路由 =====
-const screens = ['hub', 'plan', 'focus', 'print', 'album', 'worldmap', 'region', 'oracle', 'memory', 'shop', 'honor', 'settings'];
+const screens = ['hub', 'plan', 'focus', 'print', 'album', 'worldmap', 'region', 'oracle', 'memory', 'shop', 'settings'];
 
 function showScreen(name) {
   screens.forEach((s) => {
@@ -49,7 +49,6 @@ function showScreen(name) {
   if (name === 'worldmap') renderWorldmapView();
   if (name === 'region') renderRegionView();
   if (name === 'oracle') renderOracleView();
-  if (name === 'honor') renderHonorView();
 }
 
 function initRouter() {
@@ -662,63 +661,6 @@ function initOracle() {
   questionEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') btn.click(); });
 }
 
-// ===== 荣耀碑：世界足迹（全部由真实数据计算） =====
-async function renderHonorView() {
-  const listEl = document.getElementById('honorList');
-  const countEl = document.getElementById('honorCount');
-  const online = !isGuest() && isConfigured();
-
-  if (!online) {
-    countEl.textContent = '';
-    listEl.innerHTML = offlineHint('登录后，这里会刻下你的每一段足迹');
-    return;
-  }
-
-  const stats = await fetchStats();
-
-  // 额外查询：总行动数 / 累计专注次数
-  let actionTotal = 0, focusTotal = 0;
-  try {
-    const sb = getClient();
-    const [{ count: a }, { count: f }] = await Promise.all([
-      sb.from('actions').select('id', { count: 'exact', head: true }),
-      sb.from('chronicle').select('id', { count: 'exact', head: true }).filter('meta->>focus', 'eq', 'true'),
-    ]);
-    actionTotal = a || 0;
-    focusTotal = f || 0;
-  } catch (e) { /* 保留占位 */ }
-
-  const streak = stats.streak;
-  const collected = stats.collected.length;
-  const light = stats.world ? (stats.world.light ?? 0) : 0;
-  const day = stats.world ? (stats.world.day_count ?? 1) : 1;
-
-  const honors = [
-    { icon: '🏁', name: '序章完成', desc: '完成第一次行动，踏上勇者之路', cur: actionTotal, goal: 1, unit: '次' },
-    { icon: '🔥', name: '周计划达人', desc: '连续 7 天完成行动', cur: streak, goal: 7, unit: '天' },
-    { icon: '⏳', name: '专注大师', desc: '累计 3 次专注时光', cur: focusTotal, goal: 3, unit: '次' },
-    { icon: '📚', name: '收藏家', desc: '收集 15 件藏品', cur: collected, goal: 15, unit: '件' },
-    { icon: '✨', name: '世界之光', desc: '让世界之光达到 100 点', cur: light, goal: 100, unit: '点' },
-    { icon: '🗺️', name: '远行者', desc: '在世界中度过第 7 天', cur: day, goal: 7, unit: '天' },
-  ];
-
-  const earned = honors.filter((h) => h.cur >= h.goal).length;
-  countEl.textContent = `已完成 ${earned} / ${honors.length} 项荣耀`;
-  listEl.innerHTML = honors.map((h) => {
-    const done = h.cur >= h.goal;
-    const pct = Math.min(100, Math.round((h.cur / h.goal) * 100));
-    return `
-      <div class="honor-card ${done ? 'earned' : ''}">
-        <span class="honor-icon">${h.icon}</span>
-        <span class="honor-info">
-          <span class="honor-name">${h.name}</span>
-          <span class="honor-desc">${h.desc}</span>
-        </span>
-        <span class="honor-badge">${done ? '✓ 已达成' : `${h.cur} / ${h.goal} ${h.unit}`}</span>
-        <div class="bar bar-track honor-progress"><div class="bar-fill ${done ? 'fill-gold' : 'fill-blue'}" style="width:${pct}%"></div></div>
-      </div>`;
-  }).join('');
-}
 
 // ===== 神奇精灵：实时对话 / 秘密日记（异步回信） =====
 let spriteMode = 'chat';   // chat | secret
