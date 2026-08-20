@@ -674,6 +674,8 @@ label {
 /* ============ 窄屏适配（小手机） ============ */
 @media (max-width: 420px) {
   .phone { border-radius: 0; box-shadow: none; }
+  /* 输入框字号 ≥16px：防止 iOS 聚焦时自动放大页面导致画面缩放跳动 */
+  input, textarea, select { font-size: 16px; }
 }
 
 /* ============ 任务委托板（已移除，保留样式兼容） ============ */

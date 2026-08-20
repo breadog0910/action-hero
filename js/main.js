@@ -15,19 +15,51 @@ import { spriteReply } from './companion.js';
 // ===== 画布全屏贴合：400 × 880 设计稿 =====
 // 主流全面屏手机（宽高比与设计稿 0.455 偏差 ≤4%）→ 覆盖填满整屏，裁剪 ≤2% 无感；
 // 特殊比例（16:9 老机 / 平板 / 横屏 / 桌面）→ 完整显示，背景与应用同色，视觉无缝。
+// 手机键盘弹起时绝不重算缩放（否则视觉视口变矮会把整个画布缩小），只上移画布露出输入框。
+let phoneScale = 1;   // 当前缩放值（键盘弹起时保持不变）
+let kbOffset = 0;     // 键盘遮挡偏移（视觉像素，换算为画布坐标上移）
+let lastFit = { w: window.innerWidth, h: window.innerHeight, t: 0 };
+
+function applyPhoneTransform() {
+  const phone = document.getElementById('appView');
+  if (!phone) return;
+  phone.style.transform = `translate(-50%, -50%) translateY(${-kbOffset}px) scale(${phoneScale})`;
+}
+
 function fitPhone() {
   const phone = document.getElementById('appView');
   if (!phone) return;
-  const vw = window.visualViewport?.width ?? window.innerWidth;
-  const vh = window.visualViewport?.height ?? window.innerHeight;
+  // iOS：键盘弹起时视觉视口明显矮于布局视口 → 不重算缩放
+  const vv = window.visualViewport;
+  if (vv && vv.height < window.innerHeight - 60) return;
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  // 旧版 Android：键盘会压缩布局（宽度不变、高度骤减）→ 同样保持原缩放
+  const now = Date.now();
+  if (Math.abs(vw - lastFit.w) < 2 && lastFit.h - vh > 140 && now - lastFit.t > 400) return;
+  lastFit = { w: vw, h: vh, t: now };
   const ratio = vw / vh;
   const coverable = ratio <= (400 / 880) * 1.04; // 0.455 × 1.04 ≈ 0.473
-  const scale = coverable ? Math.max(vw / 400, vh / 880) : Math.min(vw / 400, vh / 880);
-  phone.style.transform = `translate(-50%, -50%) scale(${scale})`;
+  phoneScale = coverable ? Math.max(vw / 400, vh / 880) : Math.min(vw / 400, vh / 880);
+  applyPhoneTransform();
 }
 window.addEventListener('resize', fitPhone);
 window.addEventListener('orientationchange', () => setTimeout(fitPhone, 120));
-if (window.visualViewport) window.visualViewport.addEventListener('resize', fitPhone);
+
+// 键盘弹起/收起：只调整画布上移量，绝不影响缩放，保证输入时画面不缩小
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', () => {
+    const vv = window.visualViewport;
+    const kb = window.innerHeight - vv.height; // 键盘遮挡高度（视觉像素）
+    kbOffset = kb > 60 ? kb / phoneScale : 0;  // 换算成画布坐标上移量
+    applyPhoneTransform();
+    // 让当前聚焦的输入框尽量露出键盘上方
+    const el = document.activeElement;
+    if (kb > 60 && el && el.tagName && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) {
+      try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) { /* 忽略 */ }
+    }
+  });
+}
 
 // ===== 屏幕路由 =====
 const screens = ['hub', 'plan', 'focus', 'print', 'album', 'worldmap', 'region', 'oracle', 'memory', 'shop', 'settings'];
