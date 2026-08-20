@@ -671,10 +671,25 @@ label {
 .log.error { color: var(--flame-red); }
 .log.success { color: var(--grass-green); }
 
-/* ============ 窄屏适配（小手机） ============ */
-@media (max-width: 420px) {
-  .phone { border-radius: 0; box-shadow: none; }
-  /* 输入框字号 ≥16px：防止 iOS 聚焦时自动放大页面导致画面缩放跳动 */
+/* ============ 手机端适配（窄屏全宽 + 原生滚动） ============ */
+@media (max-width: 480px) {
+  /* 手机端放弃 400×880 transform 缩放，改全宽原生布局：
+     键盘弹起由浏览器原生把输入框滚到可见区，画面不缩小、不上移、不重调缩放 */
+  .phone {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    width: 100%; height: 100%;
+    transform: none !important;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  /* 每个屏幕内部可滚动：输入框/保存按钮能滚到键盘上方 */
+  .screen {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+  /* 输入框字号 ≥16px：防止 iOS 聚焦时自动放大页面 */
   input, textarea, select { font-size: 16px; }
 }
 

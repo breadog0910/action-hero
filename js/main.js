@@ -23,6 +23,8 @@ let lastFit = { w: window.innerWidth, h: window.innerHeight, t: 0 };
 function applyPhoneTransform() {
   const phone = document.getElementById('appView');
   if (!phone) return;
+  // 手机端（窄屏）：全宽原生布局，不做 transform 缩放，键盘由浏览器原生滚动处理
+  if (window.innerWidth <= 480) { phone.style.transform = 'none'; return; }
   // 可视高度（键盘弹起时 = 键盘上方的区域）
   const vv = window.visualViewport;
   const visualH = vv && vv.height ? vv.height : window.innerHeight;
@@ -38,6 +40,8 @@ function applyPhoneTransform() {
 function fitPhone() {
   const phone = document.getElementById('appView');
   if (!phone) return;
+  // 手机端（窄屏）：全宽原生布局，不做 transform 缩放
+  if (window.innerWidth <= 480) { phone.style.transform = 'none'; return; }
   // 键盘弹起（iOS：视觉视口明显矮于布局视口；旧 Android：宽度不变、高度骤减）→ 不重算缩放
   const vv = window.visualViewport;
   const keyboardUp = !!vv && vv.height < window.innerHeight - 60;
