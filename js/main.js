@@ -786,7 +786,7 @@ function bindSecretBox() {
       await chronicle.addEntry('secret', `写给精灵的秘密：${content}`);
       localStorage.setItem('sprite_secret_pending', JSON.stringify({ text: content, at: Date.now() }));
       text.value = '';
-      status.textContent = '💌 信已封存，精灵会在一段时间后回复你。';
+      status.textContent = '信已封存，精灵会在一段时间后回复你。';
       // 演示友好：约 9 秒后模拟“一段时间”，精灵来信
       setTimeout(() => {
         const stored = JSON.parse(localStorage.getItem('sprite_secret_pending') || 'null');
@@ -807,10 +807,10 @@ function bindSecretBox() {
 async function deliverSecretReply(pending, statusEl) {
   try {
     const reply = await talkSprite(`（秘密日记）${pending.text}`);
-    if (statusEl) statusEl.textContent = `📮 精灵回复了你：「${reply}」`;
+    if (statusEl) statusEl.textContent = `精灵回复了你：「${reply}」`;
     // 把回信归档到「精灵密信」书
     try {
-      await chronicle.addEntry('conversation', `🧚 精灵的回复：${reply}`);
+      await chronicle.addEntry('conversation', `精灵的回复：${reply}`);
     } catch (_) { /* 不阻塞主流程 */ }
   } catch (e) {
     if (statusEl) statusEl.textContent = '精灵还在读你的信，稍后再来看看。';
@@ -820,7 +820,6 @@ async function deliverSecretReply(pending, statusEl) {
 // ===== 回忆小屋：书架 + 翻书 =====
 // 数据模型：bookshelf 上每本书（来自 books 表）→ 点开 → 一页页翻（来自 chronicle.book_id = 当前书）
 const MEM_TYPE_NAMES = { journal: '日记', review: '复盘', conversation: '精灵对话', action: '行动', oracle: '求签', secret: '密信' };
-const MEM_TYPE_ICONS = { journal: '📖', review: '🌙', conversation: '💬', action: '⚔️', oracle: '🔮', secret: '💌' };
 const MEM_SPRITE_BOOK_TITLE = '精灵密信';
 
 let memState = {
@@ -872,8 +871,8 @@ async function showShelf() {
   }
 
   shelf.innerHTML = books.map((b) => `
-    <div class="book-spine" style="background:${escapeHtml(b.cover_color || '#A03E2B')}" data-book-id="${escapeHtml(b.id)}" role="button" tabindex="0">
-      <div class="book-spine-emoji">${escapeHtml(b.cover_emoji || '📖')}</div>
+    <div class="book-spine" style="background:${escapeHtml(b.cover_color || '#6B4423')}" data-book-id="${escapeHtml(b.id)}" role="button" tabindex="0">
+      <div class="book-spine-band"></div>
       <div class="book-spine-title">${escapeHtml(b.title || '未命名')}</div>
       <div class="book-spine-pages">${b.page_count || 0} 页</div>
     </div>
@@ -919,7 +918,7 @@ async function openBook(bookId) {
         spriteBtn.id = 'spriteChatBtn';
         spriteBtn.className = 'btn btn-secondary btn-small';
         spriteBtn.style.marginRight = '6px';
-        spriteBtn.textContent = '🧚 找精灵聊聊';
+        spriteBtn.textContent = '找精灵聊聊';
         writeBtn.parentNode.insertBefore(spriteBtn, writeBtn);
         spriteBtn.addEventListener('click', openSpritePanel);
       }
@@ -992,7 +991,7 @@ function renderSpread() {
   } else {
     document.getElementById('bookPageRightDate').textContent = '';
     document.getElementById('bookPageRightType').textContent = '';
-    document.getElementById('bookPageRightText').innerHTML = `<div class="empty">这本书还是空的 · 写下第一页吧 ✨</div>`;
+    document.getElementById('bookPageRightText').innerHTML = `<div class="empty">这本书还是空的 · 写下第一页吧</div>`;
   }
 
   // 翻页按钮
@@ -1003,11 +1002,10 @@ function renderSpread() {
 function renderPage(side, entry) {
   const dateStr = entry.date ? String(entry.date).replace(/-/g, ' · ') : '';
   const typeName = MEM_TYPE_NAMES[entry.type] || entry.type || '记录';
-  const typeIcon = MEM_TYPE_ICONS[entry.type] || '⭐';
   document.getElementById(`bookPage${side}Date`).textContent = dateStr;
-  document.getElementById(`bookPage${side}Type`).textContent = `${typeIcon} ${typeName}`;
+  document.getElementById(`bookPage${side}Type`).textContent = typeName;
   const text = (entry.content || '').slice(0, 500);
-  document.getElementById(`bookPage${side}Text`).innerHTML = `<span class="type-icon">${typeIcon}</span>${escapeHtml(text)}`;
+  document.getElementById(`bookPage${side}Text`).innerHTML = escapeHtml(text);
 }
 
 // ---------- 翻页 ----------
@@ -1029,76 +1027,72 @@ function turnPage(dir) {
   setTimeout(() => renderSpread(), 220);
 }
 
-// ---------- 新建书（弹窗：选封面 + 书名）----------
-const NEW_BOOK_EMOJIS = ['📕', '📗', '📘', '📙', '🗺️', '🌙', '✈️', '🌸', '💡', '📝', '🎨', '🧪'];
-const NEW_BOOK_COLORS = ['#A03E2B', '#3F6E8A', '#4A6E3A', '#7A4B7C', '#B47A2A', '#3E5C7A', '#6E3030', '#335E4A'];
+// ---------- 新建书（弹窗：书名 + 封面色）----------
+const NEW_BOOK_COLORS = ['#6B4423', '#9C7B2E', '#4A6E3A', '#3E6E8A', '#7A3535', '#6E4B6E', '#9E5A2E', '#2E5E5A'];
 
 function openNewBookModal() {
   if (isGuest() || !isConfigured()) {
     alert('登录后才能新建书本。');
     return;
   }
-  let pickedEmoji = NEW_BOOK_EMOJIS[0];
   let pickedColor = NEW_BOOK_COLORS[0];
 
   openModal(`
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-      <span style="font-size:24px">📚</span>
-      <div>
-        <div style="font-weight:700;color:var(--ink-brown)">新建一本</div>
-        <div style="font-size:11px;color:var(--ink-gray)">为不同主题开一本书：旅行、灵感、复盘…</div>
+    <div class="newbook-header">
+      <div class="newbook-header-title">新建一本</div>
+      <div class="newbook-header-sub">为不同主题开一本书</div>
+    </div>
+    <div class="newbook-preview">
+      <div class="newbook-preview-spine" id="newbookPreviewSpine" style="background:${pickedColor}">
+        <div class="book-spine-band"></div>
+        <div class="newbook-preview-title" id="newbookPreviewTitle">书名</div>
+        <div class="book-spine-pages">0 页</div>
       </div>
     </div>
-    <label>选个封面</label>
-    <div class="newbook-palette" id="newbookEmoji">
-      ${NEW_BOOK_EMOJIS.map((e, i) => `<button data-emoji="${e}" class="${i === 0 ? 'active' : ''}" style="background:var(--cream)">${e}</button>`).join('')}
-    </div>
-    <label>选个书脊色</label>
+    <label class="newbook-label">书名</label>
+    <input id="newbookTitle" class="newbook-input" maxlength="20" placeholder="例如：旅行日志">
+    <label class="newbook-label">简介（可选）</label>
+    <input id="newbookDesc" class="newbook-input" maxlength="40" placeholder="一句话说说这本书">
+    <label class="newbook-label">封面色</label>
     <div class="newbook-colors" id="newbookColor">
-      ${NEW_BOOK_COLORS.map((c, i) => `<button data-color="${c}" class="${i === 0 ? 'active' : ''}" style="background:${c}"></button>`).join('')}
+      ${NEW_BOOK_COLORS.map((c, i) => `<button data-color="${c}" class="${i === 0 ? 'active' : ''}" style="background:${c}" aria-label="封面色"></button>`).join('')}
     </div>
-    <div class="newbook-form">
-      <label>书名</label>
-      <input id="newbookTitle" maxlength="20" placeholder="例如：旅行日志">
-      <label>简介（可选）</label>
-      <input id="newbookDesc" maxlength="40" placeholder="一句话说说这本书">
-      <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:6px;">
-        <button class="btn btn-secondary btn-small" id="newbookCancel">取消</button>
-        <button class="btn btn-primary btn-small" id="newbookSave">创建</button>
-      </div>
+    <div class="newbook-actions">
+      <button class="btn btn-secondary btn-small" id="newbookCancel">取消</button>
+      <button class="btn btn-primary btn-small" id="newbookSave">创建</button>
     </div>
   `);
 
-  const emojiRow = document.getElementById('newbookEmoji');
   const colorRow = document.getElementById('newbookColor');
-  emojiRow.addEventListener('click', (e) => {
-    const b = e.target.closest('button'); if (!b) return;
-    emojiRow.querySelectorAll('button').forEach((x) => x.classList.remove('active'));
-    b.classList.add('active');
-    pickedEmoji = b.dataset.emoji;
-  });
+  const previewSpine = document.getElementById('newbookPreviewSpine');
+  const titleInput = document.getElementById('newbookTitle');
+  const previewTitle = document.getElementById('newbookPreviewTitle');
+
   colorRow.addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b) return;
     colorRow.querySelectorAll('button').forEach((x) => x.classList.remove('active'));
     b.classList.add('active');
     pickedColor = b.dataset.color;
+    previewSpine.style.background = pickedColor;
+  });
+  titleInput.addEventListener('input', () => {
+    previewTitle.textContent = titleInput.value.trim() || '书名';
   });
   document.getElementById('newbookCancel').addEventListener('click', closeModal);
   document.getElementById('newbookSave').addEventListener('click', async () => {
-    const title = document.getElementById('newbookTitle').value.trim();
-    if (!title) { document.getElementById('newbookTitle').focus(); return; }
+    const title = titleInput.value.trim();
+    if (!title) { titleInput.focus(); return; }
     const description = document.getElementById('newbookDesc').value.trim();
     try {
-      const book = await chronicle.createBook({ title, cover_emoji: pickedEmoji, cover_color: pickedColor, description });
+      const book = await chronicle.createBook({ title, cover_color: pickedColor, description });
       closeModal();
       await showShelf();
-      // 直接打开新书
       openBook(book.id);
     } catch (err) {
       alert('创建失败：' + err.message);
     }
   });
-  setTimeout(() => document.getElementById('newbookTitle').focus(), 50);
+  setTimeout(() => titleInput.focus(), 50);
 }
 
 // ---------- 写新页 ----------
@@ -1145,6 +1139,7 @@ async function saveWriteForm() {
 // ---------- 初始化绑定（页面加载时执行一次）----------
 function initMemory() {
   document.getElementById('newBookBtn').addEventListener('click', openNewBookModal);
+  document.getElementById('spriteEntryBtn').addEventListener('click', openSpritePanel);
   document.getElementById('closeBookBtn').addEventListener('click', closeBook);
   document.getElementById('deleteBookBtn').addEventListener('click', deleteCurrentBook);
   document.getElementById('pagePrev').addEventListener('click', () => turnPage(-1));

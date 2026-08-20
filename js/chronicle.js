@@ -22,15 +22,14 @@ export async function ensureDefaultBook() {
   if (existing) return existing;
 
   // 没有：种子创建（仅作防御，正常应通过 handle_new_user 触发器建好）
-  const id = await generateBookId(sb, user.id);
+  const id = generateBookId();
   const { data, error } = await sb
     .from('books')
     .insert({
       id,
       user_id: user.id,
       title: '我的日记',
-      cover_emoji: '📖',
-      cover_color: '#A03E2B',
+      cover_color: '#6B4423',
       description: '记录每一天的心情与故事',
     })
     .select()
@@ -51,19 +50,18 @@ export async function listBooks() {
 }
 
 // 新建一本书
-export async function createBook({ title, cover_emoji = '📕', cover_color = '#7A3B2E', description = '' }) {
+export async function createBook({ title, cover_color = '#6B4423', description = '' }) {
   const sb = getClient();
   const { data: { user } } = await sb.auth.getUser();
   if (!user) throw new Error('未登录');
   if (!title || !title.trim()) throw new Error('书名不能为空');
-  const id = await generateBookId(sb, user.id);
+  const id = generateBookId();
   const { data, error } = await sb
     .from('books')
     .insert({
       id,
       user_id: user.id,
       title: title.trim().slice(0, 30),
-      cover_emoji,
       cover_color,
       description: description?.slice(0, 80) || '',
     })
@@ -97,10 +95,10 @@ export async function getOrCreateBookByTitle(title, defaults = {}) {
 
 // 默认书本配置：type → 归属书名 + 封面默认
 const BOOK_BY_TYPE = {
-  secret:       { title: '精灵密信', cover_emoji: '🧚', cover_color: '#3F6E8A', description: '写给精灵的悄悄话与回信' },
-  conversation: { title: '精灵密信', cover_emoji: '🧚', cover_color: '#3F6E8A', description: '写给精灵的悄悄话与回信' },
+  secret:       { title: '精灵密信', cover_color: '#3E6E8A', description: '写给精灵的悄悄话与回信' },
+  conversation: { title: '精灵密信', cover_color: '#3E6E8A', description: '写给精灵的悄悄话与回信' },
 };
-const DEFAULT_BOOK = { title: '我的日记', cover_emoji: '📖', cover_color: '#A03E2B', description: '记录每一天的心情与故事' };
+const DEFAULT_BOOK = { title: '我的日记', cover_color: '#6B4423', description: '记录每一天的心情与故事' };
 
 // 取一本书的全部编年史（按时间顺序）
 export async function getBookEntries(bookId) {
@@ -114,11 +112,11 @@ export async function getBookEntries(bookId) {
   return data || [];
 }
 
-// 生成 12 位书本码：BK + 10 位序号。
-// 按 user 段错开，避免不同用户撞码。
-async function generateBookId(sb, userId) {
-  const segment = (userId || '').replace(/-/g, '').slice(0, 10).padStart(10, '0');
-  return `BK${segment}`;
+// 生成唯一书本码：BK + 时间戳 + 随机串，绝不撞码。
+function generateBookId() {
+  const ts  = Date.now().toString(36).toUpperCase().slice(-6);
+  const rnd = Math.random().toString(36).toUpperCase().slice(2, 6);
+  return `BK${ts}${rnd}`;
 }
 
 // ---------- 编年史条目 ----------

@@ -10,8 +10,8 @@ create table if not exists public.books (
   id text primary key,                          -- 12 位书本码：BK + 10 位序号
   user_id uuid not null references auth.users(id) on delete cascade,
   title text not null,                          -- 书名（必填）
-  cover_emoji text not null default '📖',       -- 封面图标
-  cover_color text not null default '#A03E2B',  -- 书脊/封面颜色
+  cover_emoji text default '',                   -- 封面图标（已弃用，保留兼容）
+  cover_color text not null default '#6B4423',   -- 书脊/封面颜色
   description text,                             -- 简介
   page_count int not null default 0,            -- 冗余字段：当前页数
   created_at timestamptz not null default now(),
@@ -21,7 +21,7 @@ create table if not exists public.books (
 comment on table public.books is '书本：把编年史按"一本书"聚合，支持多本并存、独立翻阅';
 comment on column public.books.id is '12 位书本码，BK + 10 位数字，如 BK0000000001';
 comment on column public.books.title is '书名（用户可改）';
-comment on column public.books.cover_emoji is '封面图标 emoji';
+comment on column public.books.cover_emoji is '封面图标（已弃用，保留兼容）';
 comment on column public.books.cover_color is '书脊/封面色（hex）';
 comment on column public.books.description is '书本简介';
 comment on column public.books.page_count is '页数（冗余字段，写入时维护）';
@@ -54,12 +54,18 @@ begin
   insert into public.companion (user_id) values (new.id) on conflict do nothing;
   insert into public.territory (user_id) values (new.id) on conflict do nothing;
 
-  -- 种子一本「我的日记」：使用 BK + 10 位序号，按 user 段错开，避免全局冲突
-  v_book_id := 'BK' || lpad(replace(new.id::text, '-', ''), 10, '0');
-  insert into public.books (id, user_id, title, cover_emoji, cover_color, description)
-  values (v_book_id, new.id, '我的日记', '📖', '#A03E2B', '记录每一天的心情与故事')
+  -- 种子一本「我的日记」
+  v_book_id := 'BK' || upper(substr(md5(new.id::text || clock_timestamp()::text), 1, 10));
+  insert into public.books (id, user_id, title, cover_color, description)
+  values (v_book_id, new.id, '我的日记', '#6B4423', '记录每一天的心情与故事')
   on conflict (id) do nothing;
 
   return new;
 end;
 $$;
+
+-- ---------- 6. 兼容升级：去掉 emoji NOT NULL 约束，改默认色 ----------
+-- 如果之前跑过旧版迁移（cover_emoji not null default '📖'），这里安全修正。
+alter table public.books alter column cover_emoji drop not null;
+alter table public.books alter column cover_emoji set default '';
+alter table public.books alter column cover_color set default '#6B4423';
