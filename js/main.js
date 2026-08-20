@@ -817,27 +817,218 @@ async function deliverSecretReply(pending, statusEl) {
   }
 }
 
-// ===== 回忆小屋：书架 + 翻书 =====
-// 数据模型：bookshelf 上每本书（来自 books 表）→ 点开 → 一页页翻（来自 chronicle.book_id = 当前书）
+// ===== 回忆小屋：主视图（成长日记）+ 书架 + 翻书 + 里程碑 =====
+// 数据模型：主视图展示「我的日记」默认书的最新一篇（富排版）；书架每本书（books 表）→ 点开 → 一页页翻（chronicle.book_id）
 const MEM_TYPE_NAMES = { journal: '日记', review: '复盘', conversation: '精灵对话', action: '行动', oracle: '求签', secret: '密信' };
 const MEM_SPRITE_BOOK_TITLE = '精灵密信';
+const MEM_MEMORY_VIEWS = ['memoryHomeView', 'memoryShelfView', 'memoryBookView', 'memoryMilestoneView'];
+const DIARY_WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 
 let memState = {
   book: null,            // 当前打开的书（对象）
   entries: [],           // 当前书全部条目（按 created_at 升序）
   spread: 0,             // 当前展开：0 表示"打开即见 entry[0]"（左封面 + 右 entry[0]）
   writeType: 'journal',  // 新页类型
+  from: 'shelf',         // 打开书的来路：home | shelf（关闭书时回去）
 };
 
+let diaryState = {
+  cat: '',               // 当前分类筛选（'' = 全部）
+  list: [],              // 筛选后的条目
+  idx: 0,                // 当前展示第几篇
+};
+
+function switchMemoryView(id) {
+  MEM_MEMORY_VIEWS.forEach((v) => {
+    const el = document.getElementById(v);
+    if (el) el.hidden = v !== id;
+  });
+}
+
 async function renderMemoryView() {
-  // 每次进入回忆小屋：显示书架视图
-  showShelf();
+  // 每次进入回忆小屋：显示主视图（成长日记）
+  showMemoryHome();
+}
+
+// ---------- 主视图：成长日记 ----------
+async function showMemoryHome() {
+  switchMemoryView('memoryHomeView');
+
+  const pageEl = document.getElementById('diaryPage');
+  const countEl = document.getElementById('diaryCount');
+  const online = !isGuest() && isConfigured();
+  if (!online) {
+    countEl.textContent = '游客模式';
+    pageEl.innerHTML = offlineHint('登录后，把今天写进你的成长日记');
+    document.getElementById('diaryIndicator').textContent = '0 / 0';
+    document.getElementById('diaryPrev').disabled = true;
+    document.getElementById('diaryNext').disabled = true;
+    return;
+  }
+
+  try {
+    memState.book = await chronicle.ensureDefaultBook();
+    memState.entries = await chronicle.getBookEntries(memState.book.id);
+  } catch (e) {
+    countEl.textContent = '';
+    pageEl.innerHTML = offlineHint('打开日记失败，请稍后再试');
+    return;
+  }
+
+  // 重置分类 tab 到「全部」
+  diaryState.cat = '';
+  document.querySelectorAll('#diaryTabs .diary-tab').forEach((b) => {
+    b.classList.toggle('active', !b.dataset.cat);
+  });
+  applyDiaryFilter();
+  // 默认展示最新一篇
+  diaryState.idx = Math.max(0, diaryState.list.length - 1);
+  renderDiaryPage();
+}
+
+function applyDiaryFilter() {
+  diaryState.list = diaryState.cat
+    ? memState.entries.filter((e) => ((e.meta && e.meta.category) || '') === diaryState.cat)
+    : memState.entries;
+  diaryState.idx = Math.max(0, diaryState.list.length - 1);
+}
+
+function diaryDateTitle(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(`${String(dateStr).slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return String(dateStr);
+  return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 · 星期${DIARY_WEEKDAYS[d.getDay()]}`;
+}
+
+function renderDiaryPage() {
+  const pageEl = document.getElementById('diaryPage');
+  const indicatorEl = document.getElementById('diaryIndicator');
+  const countEl = document.getElementById('diaryCount');
+  const total = diaryState.list.length;
+
+  countEl.textContent = total > 0 ? `共 ${memState.entries.length} 篇` : '';
+  indicatorEl.textContent = total > 0 ? `第 ${diaryState.idx + 1} 篇 / 共 ${total} 篇` : '0 / 0';
+  document.getElementById('diaryPrev').disabled = diaryState.idx <= 0;
+  document.getElementById('diaryNext').disabled = diaryState.idx >= total - 1;
+
+  if (total === 0) {
+    pageEl.innerHTML = diaryState.cat
+      ? `<div class="diary-empty">「${escapeHtml(diaryState.cat)}」分类下还没有日记</div>`
+      : `<div class="diary-empty">日记还是空白的<br><span>写下第一篇，开始你的故事</span></div>`;
+    return;
+  }
+
+  const e = diaryState.list[diaryState.idx];
+  const cat = (e.meta && e.meta.category) || '';
+  const mood = (e.meta && e.meta.mood) || '';
+  const typeName = MEM_TYPE_NAMES[e.type] || '记录';
+  pageEl.innerHTML = `
+    <div class="diary-page-head">
+      <span class="diary-page-date">${escapeHtml(diaryDateTitle(e.date))}</span>
+      <span class="diary-page-type">${escapeHtml(typeName)}</span>
+    </div>
+    <div class="diary-page-divider"><i></i><b></b><i></i></div>
+    ${(cat || mood) ? `
+    <div class="diary-page-meta">
+      ${cat ? `<span class="diary-tag">${escapeHtml(cat)}</span>` : ''}
+      ${mood ? `<span class="mood-chip active">${escapeHtml(mood)}</span>` : ''}
+    </div>` : ''}
+    <div class="diary-page-text">${escapeHtml((e.content || '').slice(0, 500))}</div>
+    <div class="diary-page-divider diary-page-divider-end"><i></i><b></b><i></i></div>
+  `;
+}
+
+function turnDiary(dir) {
+  const total = diaryState.list.length;
+  if (total === 0) return;
+  const next = diaryState.idx + dir;
+  if (next < 0 || next > total - 1) return;
+  const pageEl = document.getElementById('diaryPage');
+  pageEl.classList.remove('diary-flip-next', 'diary-flip-prev');
+  void pageEl.offsetWidth;
+  pageEl.classList.add(dir > 0 ? 'diary-flip-next' : 'diary-flip-prev');
+  diaryState.idx = next;
+  setTimeout(() => renderDiaryPage(), 180);
+}
+
+// 写日记：打开默认书 + 弹出写作区
+async function writeNewDiary() {
+  if (isGuest() || !isConfigured()) {
+    alert('登录后才能写日记。');
+    return;
+  }
+  try {
+    const book = await chronicle.ensureDefaultBook();
+    memState.from = 'home';
+    await openBook(book.id);
+    openWriteForm();
+  } catch (e) {
+    alert('打开日记失败：' + e.message);
+  }
+}
+
+// ---------- 成长里程碑 ----------
+async function showMilestones() {
+  switchMemoryView('memoryMilestoneView');
+  const listEl = document.getElementById('milestoneList');
+  const countEl = document.getElementById('milestoneCount');
+
+  const online = !isGuest() && isConfigured();
+  if (!online) {
+    countEl.textContent = '';
+    listEl.innerHTML = offlineHint('登录后，这里会点亮你的成长足迹');
+    return;
+  }
+
+  const stats = await fetchStats();
+
+  // 额外统计：总行动数 / 累计专注次数
+  let actionTotal = 0, focusTotal = 0;
+  try {
+    const sb = getClient();
+    const [{ count: a }, { count: f }] = await Promise.all([
+      sb.from('actions').select('id', { count: 'exact', head: true }),
+      sb.from('chronicle').select('id', { count: 'exact', head: true }).filter('meta->>focus', 'eq', 'true'),
+    ]);
+    actionTotal = a || 0;
+    focusTotal = f || 0;
+  } catch (e) { /* 保留占位 */ }
+
+  const streak = stats.streak;
+  const collected = stats.collected.length;
+  const light = stats.world ? (stats.world.light ?? 0) : 0;
+  const day = stats.world ? (stats.world.day_count ?? 1) : 1;
+
+  const miles = [
+    { name: '踏上旅程', desc: '完成第一次行动，迈出第一步', cur: actionTotal, goal: 1, unit: '次' },
+    { name: '七日之约', desc: '连续 7 天完成行动', cur: streak, goal: 7, unit: '天' },
+    { name: '静心时刻', desc: '累计 3 次专注时光', cur: focusTotal, goal: 3, unit: '次' },
+    { name: '小小收藏家', desc: '收集 15 件藏品', cur: collected, goal: 15, unit: '件' },
+    { name: '世界之光', desc: '让世界之光达到 100 点', cur: light, goal: 100, unit: '点' },
+    { name: '远行者', desc: '在世界中度过第 7 天', cur: day, goal: 7, unit: '天' },
+  ];
+
+  const earned = miles.filter((m) => m.cur >= m.goal).length;
+  countEl.textContent = `已点亮 ${earned} / ${miles.length}`;
+  listEl.innerHTML = miles.map((m) => {
+    const done = m.cur >= m.goal;
+    const pct = Math.min(100, Math.round((m.cur / m.goal) * 100));
+    return `
+      <div class="milestone-card ${done ? 'earned' : ''}">
+        <span class="milestone-dot">${done ? '✓' : ''}</span>
+        <span class="milestone-info">
+          <span class="milestone-name">${escapeHtml(m.name)}</span>
+          <span class="milestone-desc">${escapeHtml(m.desc)}</span>
+        </span>
+        <span class="milestone-badge">${done ? '已点亮' : `${m.cur} / ${m.goal} ${m.unit}`}</span>
+        <div class="bar bar-track milestone-progress"><div class="bar-fill ${done ? 'fill-gold' : 'fill-blue'}" style="width:${pct}%"></div></div>
+      </div>`;
+  }).join('');
 }
 
 // ---------- 书架 ----------
 async function showShelf() {
-  document.getElementById('memoryShelfView').hidden = false;
-  document.getElementById('memoryBookView').hidden = true;
+  switchMemoryView('memoryShelfView');
 
   const shelf = document.getElementById('bookShelf');
   const countEl = document.getElementById('shelfCount');
@@ -880,9 +1071,9 @@ async function showShelf() {
 
   // 绑定：点书脊 → 打开
   shelf.querySelectorAll('.book-spine').forEach((el) => {
-    el.addEventListener('click', () => openBook(el.dataset.bookId));
+    el.addEventListener('click', () => { memState.from = 'shelf'; openBook(el.dataset.bookId); });
     el.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openBook(el.dataset.bookId); }
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); memState.from = 'shelf'; openBook(el.dataset.bookId); }
     });
   });
 }
@@ -928,11 +1119,10 @@ async function openBook(bookId) {
       writeLabel.textContent = '写新页';
     }
 
-    document.getElementById('memoryShelfView').hidden = true;
-    document.getElementById('memoryBookView').hidden = false;
     document.getElementById('bookWrite').hidden = true;
     document.getElementById('bookWriteText').value = '';
     document.getElementById('bookWriteCount').textContent = '0 / 500';
+    switchMemoryView('memoryBookView');
 
     renderSpread();
   } catch (e) {
@@ -944,9 +1134,10 @@ function closeBook() {
   memState.book = null;
   memState.entries = [];
   memState.spread = 0;
-  document.getElementById('memoryShelfView').hidden = false;
-  document.getElementById('memoryBookView').hidden = true;
-  showShelf();
+  document.getElementById('bookWrite').hidden = true;
+  // 回到打开书时的来路
+  if (memState.from === 'home') showMemoryHome();
+  else showShelf();
 }
 
 async function deleteCurrentBook() {
@@ -1001,7 +1192,9 @@ function renderSpread() {
 
 function renderPage(side, entry) {
   const dateStr = entry.date ? String(entry.date).replace(/-/g, ' · ') : '';
-  const typeName = MEM_TYPE_NAMES[entry.type] || entry.type || '记录';
+  const meta = entry.meta || {};
+  const extra = [meta.category, meta.mood].filter(Boolean).join(' · ');
+  const typeName = (MEM_TYPE_NAMES[entry.type] || entry.type || '记录') + (extra ? ` · ${extra}` : '');
   document.getElementById(`bookPage${side}Date`).textContent = dateStr;
   document.getElementById(`bookPage${side}Type`).textContent = typeName;
   const text = (entry.content || '').slice(0, 500);
@@ -1105,6 +1298,13 @@ function openWriteForm() {
   const form = document.getElementById('bookWrite');
   const typeEl = document.getElementById('bookWriteType');
   typeEl.textContent = (memState.writeType === 'secret' ? '密信 · ' : '日记 · ') + (memState.book.title || '');
+  // 密信不需要分类/心情；普通日记重置选择
+  const isSecret = memState.writeType === 'secret';
+  document.getElementById('bookWriteControls').style.display = isSecret ? 'none' : '';
+  if (!isSecret) {
+    document.querySelectorAll('#bookWriteCat .diary-tab').forEach((b) => b.classList.remove('active'));
+    document.querySelectorAll('#bookWriteMood .mood-chip').forEach((b) => b.classList.remove('active'));
+  }
   form.hidden = false;
   document.getElementById('bookWriteText').focus();
 }
@@ -1123,7 +1323,13 @@ async function saveWriteForm() {
   const saveBtn = document.getElementById('bookWriteSave');
   saveBtn.disabled = true;
   try {
-    await chronicle.addEntry(memState.writeType, content, {}, memState.book.id);
+    // 读取分类 + 心情（单选，可不选）
+    const catBtn = document.querySelector('#bookWriteCat .diary-tab.active');
+    const moodBtn = document.querySelector('#bookWriteMood .mood-chip.active');
+    const meta = {};
+    if (catBtn) meta.category = catBtn.dataset.cat;
+    if (moodBtn) meta.mood = moodBtn.dataset.mood;
+    await chronicle.addEntry(memState.writeType, content, meta, memState.book.id);
     closeWriteForm();
     // 重新拉数据并跳到最后一页
     memState.entries = await chronicle.getBookEntries(memState.book.id);
@@ -1147,6 +1353,38 @@ function initMemory() {
   document.getElementById('writePageBtn').addEventListener('click', openWriteForm);
   document.getElementById('bookWriteCancel').addEventListener('click', closeWriteForm);
   document.getElementById('bookWriteSave').addEventListener('click', saveWriteForm);
+
+  // 主视图：三个入口 + 成长日记翻页 + 分类 tab
+  document.getElementById('entryWriteDiary').addEventListener('click', writeNewDiary);
+  document.getElementById('diaryWriteBtn').addEventListener('click', writeNewDiary);
+  document.getElementById('entryShelf').addEventListener('click', showShelf);
+  document.getElementById('entryMilestone').addEventListener('click', showMilestones);
+  document.getElementById('shelfBackBtn').addEventListener('click', showMemoryHome);
+  document.getElementById('milestoneBackBtn').addEventListener('click', showMemoryHome);
+  document.getElementById('diaryPrev').addEventListener('click', () => turnDiary(-1));
+  document.getElementById('diaryNext').addEventListener('click', () => turnDiary(1));
+  document.getElementById('diaryTabs').addEventListener('click', (e) => {
+    const b = e.target.closest('.diary-tab'); if (!b) return;
+    document.querySelectorAll('#diaryTabs .diary-tab').forEach((x) => x.classList.remove('active'));
+    b.classList.add('active');
+    diaryState.cat = b.dataset.cat || '';
+    applyDiaryFilter();
+    renderDiaryPage();
+  });
+
+  // 写作区：分类 / 心情 单选（再点一次取消）
+  document.getElementById('bookWriteCat').addEventListener('click', (e) => {
+    const b = e.target.closest('.diary-tab'); if (!b) return;
+    const was = b.classList.contains('active');
+    document.querySelectorAll('#bookWriteCat .diary-tab').forEach((x) => x.classList.remove('active'));
+    if (!was) b.classList.add('active');
+  });
+  document.getElementById('bookWriteMood').addEventListener('click', (e) => {
+    const b = e.target.closest('.mood-chip'); if (!b) return;
+    const was = b.classList.contains('active');
+    document.querySelectorAll('#bookWriteMood .mood-chip').forEach((x) => x.classList.remove('active'));
+    if (!was) b.classList.add('active');
+  });
 
   // 字符计数 + 限长
   const text = document.getElementById('bookWriteText');

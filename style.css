@@ -1479,3 +1479,171 @@ label {
 
 /* 书架精灵入口按钮 */
 .bookshelf-sprite-btn { margin: 6px auto 0; display: flex; align-items: center; gap: 5px; }
+
+/* ============ 回忆小屋 · 主视图（成长日记）============ */
+.memory-entry-row { flex-direction: column; }
+.entry-milestone .entry-icon { background: #4A6E3A; }
+
+.diary-block { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
+
+/* 分类 tab */
+.diary-tabs { display: flex; gap: 6px; }
+.diary-tab {
+  flex: 1;
+  padding: 6px 0;
+  font-size: 11px; font-weight: 600;
+  font-family: inherit;
+  color: var(--ink-gray);
+  background: var(--cream);
+  border: 1px solid rgba(95, 60, 32, 0.16);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.diary-tab.active {
+  background: var(--gold);
+  border-color: var(--gold-deep);
+  color: #FFF7E6;
+}
+
+/* 翻开的日记页 */
+.diary-openbook { position: relative; }
+.diary-page {
+  min-height: 300px;
+  padding: 20px 18px 18px;
+  background-color: #FBF3DE;
+  background-image: repeating-linear-gradient(
+    180deg, transparent 0px, transparent 27px, rgba(95, 60, 32, 0.09) 27px, rgba(95, 60, 32, 0.09) 28px
+  );
+  border: 1px solid rgba(139, 106, 62, 0.28);
+  border-radius: 10px;
+  box-shadow:
+    0 4px 12px -4px rgba(60, 30, 10, 0.22),
+    inset 0 0 26px rgba(198, 153, 51, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: hidden;
+}
+.diary-page-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.diary-page-date { font-size: 12px; font-weight: 700; color: var(--ink-brown); letter-spacing: 0.5px; }
+.diary-page-type { font-size: 10px; font-weight: 600; color: var(--gold-deep); white-space: nowrap; }
+
+/* 装饰分隔线：渐变线 + 菱形金点 */
+.diary-page-divider { display: flex; align-items: center; gap: 8px; margin: 2px 0; }
+.diary-page-divider i { flex: 1; height: 1px; }
+.diary-page-divider i:first-child { background: linear-gradient(90deg, transparent, rgba(198, 153, 51, 0.55)); }
+.diary-page-divider i:last-child  { background: linear-gradient(90deg, rgba(198, 153, 51, 0.55), transparent); }
+.diary-page-divider b {
+  width: 6px; height: 6px;
+  transform: rotate(45deg);
+  background: var(--gold);
+  flex-shrink: 0;
+  box-shadow: 0 0 0 2px rgba(198, 153, 51, 0.18);
+}
+.diary-page-divider-end { opacity: 0.7; }
+
+.diary-page-meta { display: flex; gap: 6px; flex-wrap: wrap; }
+.diary-tag {
+  font-size: 10px; font-weight: 700;
+  color: var(--gold-deep);
+  background: rgba(198, 153, 51, 0.14);
+  border: 1px solid rgba(198, 153, 51, 0.4);
+  padding: 2px 9px;
+  border-radius: 999px;
+}
+.mood-chip {
+  font-size: 10px; font-weight: 600;
+  font-family: inherit;
+  color: var(--ink-gray);
+  background: var(--cream);
+  border: 1px solid rgba(95, 60, 32, 0.18);
+  padding: 2px 9px;
+  border-radius: 999px;
+  cursor: default;
+  transition: all 0.15s ease;
+}
+.mood-chips .mood-chip { cursor: pointer; }
+.mood-chip.active {
+  color: #FFF7E6;
+  background: #4A6E3A;
+  border-color: #3A5630;
+}
+
+.diary-page-text {
+  font-family: "Songti SC", "STSong", "Source Han Serif SC", serif;
+  font-size: 13px;
+  line-height: 2.0;
+  color: var(--ink-brown);
+  white-space: pre-wrap;
+  word-break: break-word;
+  flex: 1;
+}
+.diary-empty {
+  text-align: center;
+  color: var(--ink-gray);
+  font-size: 12px;
+  padding: 46px 0;
+  line-height: 2;
+  font-style: italic;
+}
+.diary-empty span { font-size: 11px; opacity: 0.75; }
+
+.diary-foot { display: flex; justify-content: center; }
+.diary-page-indicator { font-size: 10px; color: var(--ink-gray); letter-spacing: 1px; }
+
+/* 日记页翻页动画 */
+.diary-page.diary-flip-next { animation: diaryFlipNext 0.35s ease both; }
+.diary-page.diary-flip-prev { animation: diaryFlipPrev 0.35s ease both; }
+@keyframes diaryFlipNext {
+  0%   { opacity: 1; transform: translateX(0); }
+  40%  { opacity: 0.35; transform: translateX(7px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+@keyframes diaryFlipPrev {
+  0%   { opacity: 1; transform: translateX(0); }
+  40%  { opacity: 0.35; transform: translateX(-7px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+
+/* 写作区：分类 / 心情选择 */
+.book-write-controls { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.book-write-row { display: flex; align-items: center; gap: 8px; }
+.book-write-label { font-size: 11px; font-weight: 700; color: var(--ink-gray); flex-shrink: 0; width: 28px; }
+.diary-tabs-mini { flex: 1; display: flex; gap: 5px; }
+.diary-tabs-mini .diary-tab { flex: 1; padding: 4px 0; font-size: 10px; }
+.mood-chips { flex: 1; display: flex; gap: 5px; flex-wrap: wrap; }
+
+/* ============ 成长里程碑 ============ */
+.milestone-card {
+  display: grid;
+  grid-template-columns: 34px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  background: var(--cream);
+  border: var(--card-stroke);
+  border-radius: 12px;
+}
+.milestone-card.earned {
+  background: linear-gradient(180deg, var(--cream) 0%, var(--parchment) 100%);
+  border-color: rgba(198, 153, 51, 0.55);
+}
+.milestone-dot {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  background: var(--parchment-dark);
+  color: #FFF7E6;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 700;
+}
+.milestone-card.earned .milestone-dot {
+  background: var(--gold);
+  box-shadow: 0 0 0 3px rgba(198, 153, 51, 0.22);
+}
+.milestone-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.milestone-name { font-size: 13px; font-weight: 700; color: var(--ink-brown); }
+.milestone-desc { font-size: 11px; color: var(--ink-gray); line-height: 1.5; }
+.milestone-badge { font-size: 10px; font-weight: 700; color: var(--gold-deep); white-space: nowrap; }
+.milestone-card:not(.earned) .milestone-badge { color: var(--ink-gray); }
+.milestone-progress { grid-column: 1 / 4; }

@@ -5,19 +5,18 @@ import { getClient } from './supabase.js';
 
 // ---------- 书本管理 ----------
 
-// 取该用户的「我的日记」book_id；若不存在则种子创建
+// 取该用户的「我的日记」book；若不存在则种子创建
 export async function ensureDefaultBook() {
   const sb = getClient();
   const { data: { user } } = await sb.auth.getUser();
   if (!user) throw new Error('未登录');
 
-  // 先按 user_id 找任意一本（默认日记已建好）
+  // 按 title 精准查找默认书（不能按 updated_at 拿任意一本，否则会错拿用户的自定义书）
   const { data: existing } = await sb
     .from('books')
     .select('*')
     .eq('user_id', user.id)
-    .order('updated_at', { ascending: false })
-    .limit(1)
+    .eq('title', '我的日记')
     .maybeSingle();
   if (existing) return existing;
 
