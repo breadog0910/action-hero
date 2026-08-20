@@ -15,50 +15,50 @@ import { spriteReply } from './companion.js';
 // ===== 画布全屏贴合：400 × 880 设计稿 =====
 // 主流全面屏手机（宽高比与设计稿 0.455 偏差 ≤4%）→ 覆盖填满整屏，裁剪 ≤2% 无感；
 // 特殊比例（16:9 老机 / 平板 / 横屏 / 桌面）→ 完整显示，背景与应用同色，视觉无缝。
-// 手机键盘弹起时绝不重算缩放（否则视觉视口变矮会把整个画布缩小），只上移画布露出输入框。
+// 手机键盘弹起时绝不重算缩放（否则视觉视口变矮会把整个画布缩小）；
+// 而是把画布上移，让底部（保存按钮等）始终露出在键盘上方，保证能正常输入和保存。
 let phoneScale = 1;   // 当前缩放值（键盘弹起时保持不变）
-let kbOffset = 0;     // 键盘遮挡偏移（视觉像素，换算为画布坐标上移）
 let lastFit = { w: window.innerWidth, h: window.innerHeight, t: 0 };
 
 function applyPhoneTransform() {
   const phone = document.getElementById('appView');
   if (!phone) return;
-  phone.style.transform = `translate(-50%, -50%) translateY(${-kbOffset}px) scale(${phoneScale})`;
+  // 可视高度（键盘弹起时 = 键盘上方的区域）
+  const vv = window.visualViewport;
+  const visualH = vv && vv.height ? vv.height : window.innerHeight;
+  // 画布在布局视口里的垂直范围（translate(-50%,-50%) 居中）
+  const canvasH = 880 * phoneScale;
+  const top = (window.innerHeight - canvasH) / 2;
+  const bottom = top + canvasH;
+  // 底部超出可视区多少就上移多少（换算成画布坐标），保证按钮可点
+  const lift = Math.max(0, bottom - visualH) / phoneScale;
+  phone.style.transform = `translate(-50%, -50%) translateY(${-lift}px) scale(${phoneScale})`;
 }
 
 function fitPhone() {
   const phone = document.getElementById('appView');
   if (!phone) return;
-  // iOS：键盘弹起时视觉视口明显矮于布局视口 → 不重算缩放
+  // 键盘弹起（iOS：视觉视口明显矮于布局视口；旧 Android：宽度不变、高度骤减）→ 不重算缩放
   const vv = window.visualViewport;
-  if (vv && vv.height < window.innerHeight - 60) return;
+  const keyboardUp = !!vv && vv.height < window.innerHeight - 60;
   const vw = window.innerWidth;
   const vh = window.innerHeight;
-  // 旧版 Android：键盘会压缩布局（宽度不变、高度骤减）→ 同样保持原缩放
   const now = Date.now();
-  if (Math.abs(vw - lastFit.w) < 2 && lastFit.h - vh > 140 && now - lastFit.t > 400) return;
-  lastFit = { w: vw, h: vh, t: now };
-  const ratio = vw / vh;
-  const coverable = ratio <= (400 / 880) * 1.04; // 0.455 × 1.04 ≈ 0.473
-  phoneScale = coverable ? Math.max(vw / 400, vh / 880) : Math.min(vw / 400, vh / 880);
-  applyPhoneTransform();
+  const androidKeyboard = !keyboardUp && Math.abs(vw - lastFit.w) < 2 && lastFit.h - vh > 140 && now - lastFit.t > 400;
+  if (!keyboardUp && !androidKeyboard) {
+    lastFit = { w: vw, h: vh, t: now };
+    const ratio = vw / vh;
+    const coverable = ratio <= (400 / 880) * 1.04; // 0.455 × 1.04 ≈ 0.473
+    phoneScale = coverable ? Math.max(vw / 400, vh / 880) : Math.min(vw / 400, vh / 880);
+  }
+  applyPhoneTransform(); // 无论是否重算缩放，都基于当前视口刷新上移量
 }
 window.addEventListener('resize', fitPhone);
 window.addEventListener('orientationchange', () => setTimeout(fitPhone, 120));
 
-// 键盘弹起/收起：只调整画布上移量，绝不影响缩放，保证输入时画面不缩小
+// 键盘弹起/收起：只刷新上移量，绝不影响缩放，保证输入时画面不缩小、底部按钮可点
 if (window.visualViewport) {
-  window.visualViewport.addEventListener('resize', () => {
-    const vv = window.visualViewport;
-    const kb = window.innerHeight - vv.height; // 键盘遮挡高度（视觉像素）
-    kbOffset = kb > 60 ? kb / phoneScale : 0;  // 换算成画布坐标上移量
-    applyPhoneTransform();
-    // 让当前聚焦的输入框尽量露出键盘上方
-    const el = document.activeElement;
-    if (kb > 60 && el && el.tagName && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) {
-      try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) { /* 忽略 */ }
-    }
-  });
+  window.visualViewport.addEventListener('resize', applyPhoneTransform);
 }
 
 // ===== 屏幕路由 =====
